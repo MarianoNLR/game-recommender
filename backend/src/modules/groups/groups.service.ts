@@ -18,9 +18,7 @@ export class GroupsService {
         createdFromIp: ip,
         expiresAt,
         members: {
-          create: {
-            steamId: createGroupDto.creatorSteamId,
-          },
+          create: createGroupDto.memberSteamIds.map((steamId) => ({ steamId })),
         },
       },
       include: { members: true },
