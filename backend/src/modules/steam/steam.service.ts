@@ -11,7 +11,12 @@ export class SteamService {
     // For a given Steam ID, this method would call the Steam API to retrieve the list of owned games.
     const response = await this.steamApiClient.getOwnedGames(steamId);
 
-    return response.response.games.map((game: OwnedGamesResponseDto) => ({
+    // Filter games that have been played for more than 5 hours (300 minutes) to focus on games the user has engaged with.
+    const gamesFiltered = response.response.games.filter(
+      (game) => game.playtime_forever >= 300,
+    );
+
+    return gamesFiltered.map((game: OwnedGamesResponseDto) => ({
       appid: game.appid,
       name: game.name,
       playtime_forever: game.playtime_forever,
