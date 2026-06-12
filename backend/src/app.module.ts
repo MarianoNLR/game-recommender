@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma.module';
+import { RecommendationModule } from './modules/recommendation/recommendation.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { PrismaModule } from './prisma.module';
     }),
     GroupsModule,
     SteamModule,
+    RecommendationModule,
     PrismaModule,
   ],
   controllers: [AppController],
