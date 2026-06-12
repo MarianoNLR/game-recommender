@@ -7,17 +7,17 @@ export class GroupsController {
   constructor(private groupsService: GroupsService) {}
 
   @Post()
-  create(@Body() createGroupDto: CreateGroupDto, @Ip() ip: string): any {
+  create(@Body() createGroupDto: CreateGroupDto, @Ip() ip: string) {
     return this.groupsService.create(createGroupDto, ip);
   }
 
   @Get()
-  findAll(): any[] {
+  findAll() {
     return this.groupsService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string): any {
-    return this.groupsService.findOne(+id);
+  @Get(':accessCode')
+  findOne(@Param('accessCode') accessCode: string) {
+    return this.groupsService.findOne(accessCode);
   }
 }
