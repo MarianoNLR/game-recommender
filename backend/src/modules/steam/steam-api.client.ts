@@ -41,6 +41,7 @@ export class SteamApiClient {
   }
 
   async getAppsDetails(appId: number[]): Promise<any> {
+    // TODO: implement batching for large number of appIds to avoid hitting rate limits.
     const data: any = {};
     for (const id of appId) {
       console.log(`Fetching details for app ID: ${id}`);
