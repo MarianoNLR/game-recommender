@@ -10,4 +10,9 @@ export class RecommendationController {
   async getGroupProfile(@Param('accessCode') accessCode: string) {
     return this.recommendationService.getGroupProfile(accessCode);
   }
+
+  @Get(':accessCode/preferences')
+  async getGroupPreferences(@Param('accessCode') accessCode: string) {
+    return this.recommendationService.getGroupPreferences(accessCode);
+  }
 }
