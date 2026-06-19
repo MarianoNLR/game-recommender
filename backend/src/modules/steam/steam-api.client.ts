@@ -53,4 +53,19 @@ export class SteamApiClient {
     }
     return data;
   }
+
+  async getAppTags(appId: number[]): Promise<any> {
+    // TODO: implement batching and caching to avoid rate limits and improve performance.
+    const data: any = {};
+    for (const id of appId) {
+      const url = `https://steamspy.com/api.php?request=appdetails&appid=${id}`;
+      const response: AxiosResponse<any> = await firstValueFrom(
+        this.httpService.get<any>(url),
+      );
+      data[id] = response.data.tags ?? {};
+
+      await new Promise((resolve) => setTimeout(resolve, 100)); // Small delay to avoid rate limits.
+    }
+    return data;
+  }
 }
