@@ -36,4 +36,10 @@ export class SteamService {
     const response = await this.steamApiClient.getAppsDetails(appIds);
     return response;
   }
+
+  async getAppTags(appIds: number[]): Promise<any> {
+    // This method would call the Steam API to retrieve tags for a list of app IDs.
+    const response = await this.steamApiClient.getAppTags(appIds);
+    return response;
+  }
 }
