@@ -42,14 +42,31 @@ export class SteamApiClient {
 
   async getAppsDetails(appId: number[]): Promise<any> {
     // TODO: implement batching for large number of appIds to avoid hitting rate limits.
-    const data: any = {};
+    const data: any = [];
     for (const id of appId) {
       console.log(`Fetching details for app ID: ${id}`);
       const url = `https://store.steampowered.com/api/appdetails?appids=${id}`;
       const response: AxiosResponse<any> = await firstValueFrom(
         this.httpService.get<any>(url),
       );
-      data[id] = response.data[id];
+      const { success } = response.data[id];
+      const {
+        type,
+        name,
+        steam_appid,
+        is_free,
+        price_overview,
+        recommendations,
+      } = response.data[id].data;
+      data.push({
+        success,
+        type,
+        name,
+        steam_appid,
+        is_free,
+        price_overview,
+        recommendations,
+      });
     }
     return data;
   }
@@ -64,7 +81,7 @@ export class SteamApiClient {
       );
       data[id] = response.data.tags ?? {};
 
-      await new Promise((resolve) => setTimeout(resolve, 100)); // Small delay to avoid rate limits.
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Small delay to avoid rate limits.
     }
     return data;
   }
