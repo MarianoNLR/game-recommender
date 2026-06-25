@@ -4,6 +4,7 @@ import { AxiosResponse } from 'axios';
 import { SteamApiResponse, SteamPlayerSummaryResponse } from './steam.types';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config/dist/config.service';
+import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class SteamApiClient {
@@ -12,6 +13,7 @@ export class SteamApiClient {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly prismaService: PrismaService,
   ) {
     this.apiKey = this.configService.get<string>('STEAM_API_KEY') ?? '';
   }
@@ -41,15 +43,51 @@ export class SteamApiClient {
   }
 
   async getAppsDetails(appId: number[]): Promise<any> {
-    const data: any = {};
+    // TODO: implement batching for large number of appIds to avoid hitting rate limits.
+    const data: any = [];
     for (const id of appId) {
       console.log(`Fetching details for app ID: ${id}`);
       const url = `https://store.steampowered.com/api/appdetails?appids=${id}`;
       const response: AxiosResponse<any> = await firstValueFrom(
         this.httpService.get<any>(url),
       );
-      data[id] = response.data[id];
+      const { success } = response.data[id];
+      const {
+        type,
+        name,
+        steam_appid,
+        is_free,
+        price_overview,
+        recommendations,
+      } = response.data[id].data;
+      data.push({
+        success,
+        type,
+        name,
+        steam_appid,
+        is_free,
+        price_overview,
+        recommendations,
+      });
     }
     return data;
+  }
+
+  async getAppTags(appId: number): Promise<any> {
+    // TODO: implement batching and caching to avoid rate limits and improve performance.
+    const url = `https://steamspy.com/api.php?request=appdetails&appid=${appId}`;
+    const response: AxiosResponse<any> = await firstValueFrom(
+      this.httpService.get<any>(url),
+    );
+    return response.data.tags;
+  }
+
+  async getAppsByTag(tag: string): Promise<any> {
+    const url = `https://steamspy.com/api.php?request=tag&tag=${tag}`;
+    console.log(url);
+    const response: AxiosResponse<any> = await firstValueFrom(
+      this.httpService.get<any>(url),
+    );
+    return response;
   }
 }

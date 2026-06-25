@@ -5,6 +5,9 @@ import {
   MinLength,
   MaxLength,
   IsOptional,
+  IsArray,
+  ArrayMinSize,
+  ArrayMaxSize,
 } from 'class-validator';
 
 export class CreateGroupDto {
@@ -18,6 +21,9 @@ export class CreateGroupDto {
   @IsOptional()
   budget?: number;
 
-  @IsString()
-  creatorSteamId: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(12)
+  @IsString({ each: true })
+  memberSteamIds: string[];
 }
