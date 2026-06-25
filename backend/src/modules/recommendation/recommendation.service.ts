@@ -103,11 +103,9 @@ export class RecommendationService {
   async getGroupPreferences(accessCode: string) {
     // This method will retrieve the group preferences based on the provided access code.
     // const { group, topGamesByMember, topAppIds } = await this.getGroupProfile(accessCode);
-
     // const tagsByAppId = await this.steamService.getAppTags(topAppIds);
     // console.log(tagsByAppId);
     // const groupTagProfile: Record<string, number> = {};
-
     // topGamesByMember.forEach(({ topGames }) => {
     //   topGames.forEach((game) => {
     //     const tags = tagsByAppId[game.appid] ?? {};
@@ -119,9 +117,7 @@ export class RecommendationService {
     //     });
     //   });
     // });
-
     // //const appDetails = await this.steamService.getAppsDetails(topAppIds);
-
     // const sortedTags = Object.entries(groupTagProfile)
     //   .sort(([, a], [, b]) => b - a)
     //   .map(([tag]) => tag);
@@ -132,8 +128,43 @@ export class RecommendationService {
     // };
   }
 
-  // async getGroupRecommendations(accessCode: string) {
-  //   // This method will generate game recommendations for the group based on the provided access code.
-  //   return;
-  // }
+  async getGroupRecommendations(accessCode: string) {
+    // This method will generate game recommendations for the group based on the provided access code.
+    const { memberProfiles, groupTagScores, topGroupTags } =
+      await this.getGroupProfile(accessCode);
+    console.log(memberProfiles, groupTagScores, topGroupTags);
+
+    // Group Top Tags to search in steamspy
+    const tagsToSearch = topGroupTags.slice(0, 3);
+
+    // Search games by tag
+    const candidatesByTag = await Promise.all(
+      tagsToSearch.map((tag) => {
+        const result = this.steamService.getAppsByTag(tag);
+        return result;
+      }),
+    );
+
+    // Count appearances of each candidate
+    const appearances: Record<string, number> = {};
+    candidatesByTag.forEach((games) => {
+      Object.keys(games).forEach((appid) => {
+        const id = Number(appid);
+        appearances[id] = (appearances[id] || 0) + 1;
+      });
+    });
+
+    // Set with group's owned games
+    const ownedAppIds = new Set<number>();
+    memberProfiles.forEach(({ games }) => {
+      games.forEach((game) => ownedAppIds.add(game.appid));
+    });
+
+    const recommendations = Object.entries(appearances)
+      .filter(([appId]) => !ownedAppIds.has(Number(appId)))
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 20)
+      .map(([appId, count]) => ({ appId: Number(appId), tagMatches: count }));
+    return { topGroupTags: tagsToSearch, recommendations };
+  }
 }
