@@ -36,3 +36,9 @@ model GroupMember {
 
   @@unique([groupId, steamId])
 }
+
+model GameTags {
+  appId Int @id
+  tags Json
+  fetchedAt DateTime @default(now())
+}
