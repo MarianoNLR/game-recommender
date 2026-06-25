@@ -29,4 +29,9 @@ export class SteamController {
     const appIdArray = appIds.split(',').map((id) => parseInt(id, 10));
     return this.steamService.getAppTags(appIdArray);
   }
+
+  @Get('apps-by-tag')
+  async getAppsByTag(@Query('tag') tag: string): Promise<any> {
+    return this.steamService.getAppsByTag(tag);
+  }
 }
