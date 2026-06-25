@@ -4,6 +4,7 @@ import { AxiosResponse } from 'axios';
 import { SteamApiResponse, SteamPlayerSummaryResponse } from './steam.types';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config/dist/config.service';
+import { PrismaService } from 'src/prisma.service';
 
 @Injectable()
 export class SteamApiClient {
@@ -12,6 +13,7 @@ export class SteamApiClient {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly prismaService: PrismaService,
   ) {
     this.apiKey = this.configService.get<string>('STEAM_API_KEY') ?? '';
   }
@@ -71,18 +73,21 @@ export class SteamApiClient {
     return data;
   }
 
-  async getAppTags(appId: number[]): Promise<any> {
+  async getAppTags(appId: number): Promise<any> {
     // TODO: implement batching and caching to avoid rate limits and improve performance.
-    const data: any = {};
-    for (const id of appId) {
-      const url = `https://steamspy.com/api.php?request=appdetails&appid=${id}`;
-      const response: AxiosResponse<any> = await firstValueFrom(
-        this.httpService.get<any>(url),
-      );
-      data[id] = response.data.tags ?? {};
+    const url = `https://steamspy.com/api.php?request=appdetails&appid=${appId}`;
+    const response: AxiosResponse<any> = await firstValueFrom(
+      this.httpService.get<any>(url),
+    );
+    return response.data.tags;
+  }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Small delay to avoid rate limits.
-    }
-    return data;
+  async getAppsByTag(tag: string): Promise<any> {
+    const url = `https://steamspy.com/api.php?request=tag&tag=${tag}`;
+    console.log(url);
+    const response: AxiosResponse<any> = await firstValueFrom(
+      this.httpService.get<any>(url),
+    );
+    return response;
   }
 }
