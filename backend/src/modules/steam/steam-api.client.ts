@@ -44,10 +44,10 @@ export class SteamApiClient {
 
   async getAppsDetails(appId: number[]): Promise<any> {
     // TODO: implement batching for large number of appIds to avoid hitting rate limits.
-    const data: any = [];
+    const data: any = {};
     for (const id of appId) {
       console.log(`Fetching details for app ID: ${id}`);
-      const url = `https://store.steampowered.com/api/appdetails?appids=${id}`;
+      const url = `https://store.steampowered.com/api/appdetails?appids=${id}&cc=us`;
       const response: AxiosResponse<any> = await firstValueFrom(
         this.httpService.get<any>(url),
       );
@@ -60,7 +60,7 @@ export class SteamApiClient {
         price_overview,
         recommendations,
       } = response.data[id].data;
-      data.push({
+      data[id] = {
         success,
         type,
         name,
@@ -68,7 +68,7 @@ export class SteamApiClient {
         is_free,
         price_overview,
         recommendations,
-      });
+      };
     }
     return data;
   }
