@@ -135,7 +135,7 @@ export class RecommendationService {
     console.log(memberProfiles, groupTagScores, topGroupTags);
 
     // Group Top Tags to search in steamspy
-    const tagsToSearch = topGroupTags.slice(0, 3);
+    const tagsToSearch = topGroupTags.slice(0, 5);
 
     // Search games by tag
     const candidatesByTag = await Promise.all(
@@ -145,12 +145,13 @@ export class RecommendationService {
       }),
     );
 
-    // Count appearances of each candidate
+    // Count wieight of each candidate using index of tag.
     const appearances: Record<string, number> = {};
-    candidatesByTag.forEach((games) => {
+    candidatesByTag.forEach((games, index) => {
+      const weight = tagsToSearch.length - index;
       Object.keys(games).forEach((appid) => {
         const id = Number(appid);
-        appearances[id] = (appearances[id] || 0) + 1;
+        appearances[id] = (appearances[id] || 0) + weight;
       });
     });
 
@@ -163,8 +164,26 @@ export class RecommendationService {
     const recommendations = Object.entries(appearances)
       .filter(([appId]) => !ownedAppIds.has(Number(appId)))
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 20)
+      .slice(0, 5)
       .map(([appId, count]) => ({ appId: Number(appId), tagMatches: count }));
-    return { topGroupTags: tagsToSearch, recommendations };
+
+    const appIds = recommendations.map(({ appId }) => appId);
+    const detailsMap = await this.steamService.getAppsDetails(appIds);
+    console.log(detailsMap);
+    const recommendationsResponse = recommendations.map(
+      ({ appId, tagMatches }) => {
+        const details = detailsMap[appId] || {};
+        console.log(details);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+        return {
+          ...details,
+          score: tagMatches,
+        };
+      },
+    );
+    return {
+      topGroupTags: tagsToSearch,
+      groupRecommendations: recommendationsResponse,
+    };
   }
 }
