@@ -6,15 +6,20 @@ import {
 import { CreateGroupDto } from './dto/create-group.dto.js';
 import { PrismaService } from '../../prisma.service';
 import { randomUUID } from 'crypto';
+import { plainToInstance } from 'class-transformer';
+import { GroupResponseDto } from './dto/group-response.dto';
 
 @Injectable()
 export class GroupsService {
   constructor(private readonly prisma: PrismaService) {}
-  async create(createGroupDto: CreateGroupDto, ip: string) {
+  async create(
+    createGroupDto: CreateGroupDto,
+    ip: string,
+  ): Promise<GroupResponseDto> {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24);
 
-    return await this.prisma.group.create({
+    const group = await this.prisma.group.create({
       data: {
         name: createGroupDto.name,
         budget: createGroupDto.budget,
@@ -27,16 +32,21 @@ export class GroupsService {
       },
       include: { members: true },
     });
+    return plainToInstance(GroupResponseDto, group, {
+      excludeExtraneousValues: true,
+    });
   }
 
-  async findAll() {
+  async findAll(): Promise<GroupResponseDto[]> {
     const groups = await this.prisma.group.findMany({
       include: { members: true },
     });
-    return groups;
+    return plainToInstance(GroupResponseDto, groups, {
+      excludeExtraneousValues: true,
+    });
   }
 
-  async findOne(accessCode: string) {
+  async findOne(accessCode: string): Promise<GroupResponseDto> {
     const group = await this.prisma.group.findUnique({
       where: { accessCode },
       include: { members: true },
@@ -53,6 +63,8 @@ export class GroupsService {
         `Group with access code ${accessCode} has expired`,
       );
     }
-    return group;
+    return plainToInstance(GroupResponseDto, group, {
+      excludeExtraneousValues: true,
+    });
   }
 }
