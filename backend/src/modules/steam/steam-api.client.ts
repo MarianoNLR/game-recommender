@@ -1,7 +1,14 @@
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosResponse } from 'axios';
-import { SteamApiResponse, SteamPlayerSummaryResponse } from './steam.types';
+import {
+  SteamAppDetailsMap,
+  GetOwnedGamesResponse,
+  SteamAppDetails,
+  SteamPlayerSummaryResponse,
+  SteamSpyGameTagsResponse,
+  SteamSpyGame,
+} from './steam.types';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config/dist/config.service';
 import { PrismaService } from 'src/prisma.service';
@@ -18,11 +25,11 @@ export class SteamApiClient {
     this.apiKey = this.configService.get<string>('STEAM_API_KEY') ?? '';
   }
 
-  async getOwnedGames(steamId: string): Promise<SteamApiResponse> {
+  async getOwnedGames(steamId: string): Promise<GetOwnedGamesResponse> {
     const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${this.apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`;
 
-    const response: AxiosResponse<SteamApiResponse> = await firstValueFrom(
-      this.httpService.get<SteamApiResponse>(url),
+    const response: AxiosResponse<GetOwnedGamesResponse> = await firstValueFrom(
+      this.httpService.get<GetOwnedGamesResponse>(url),
     );
 
     return response.data;
@@ -42,30 +49,36 @@ export class SteamApiClient {
     return response.data;
   }
 
-  async getAppsDetails(appId: number[]): Promise<any> {
+  async getAppsDetails(appId: number[]): Promise<SteamAppDetailsMap> {
     // TODO: implement batching for large number of appIds to avoid hitting rate limits.
-    const data: any = {};
+    const data: SteamAppDetailsMap = {};
     for (const id of appId) {
       console.log(`Fetching details for app ID: ${id}`);
       const url = `https://store.steampowered.com/api/appdetails?appids=${id}&cc=us`;
-      const response: AxiosResponse<any> = await firstValueFrom(
-        this.httpService.get<any>(url),
+      const response: AxiosResponse<SteamAppDetails> = await firstValueFrom(
+        this.httpService.get<SteamAppDetails>(url),
       );
+      console.log(response.data);
       const { success } = response.data[id];
+      if (!success) continue;
       const {
         type,
         name,
         steam_appid,
         is_free,
+        short_description,
+        header_image,
         price_overview,
         recommendations,
       } = response.data[id].data;
+
       data[id] = {
-        success,
         type,
         name,
         steam_appid,
         is_free,
+        short_description,
+        header_image,
         price_overview,
         recommendations,
       };
@@ -73,21 +86,21 @@ export class SteamApiClient {
     return data;
   }
 
-  async getAppTags(appId: number): Promise<any> {
+  async getAppTags(appId: number): Promise<Record<string, number>> {
     // TODO: implement batching and caching to avoid rate limits and improve performance.
     const url = `https://steamspy.com/api.php?request=appdetails&appid=${appId}`;
-    const response: AxiosResponse<any> = await firstValueFrom(
-      this.httpService.get<any>(url),
-    );
-    return response.data.tags;
+    const response: AxiosResponse<SteamSpyGameTagsResponse> =
+      await firstValueFrom(this.httpService.get<SteamSpyGameTagsResponse>(url));
+    return response.data.tags ?? {};
   }
 
-  async getAppsByTag(tag: string): Promise<any> {
+  async getAppsByTag(tag: string): Promise<Record<string, SteamSpyGame>> {
     const url = `https://steamspy.com/api.php?request=tag&tag=${tag}`;
     console.log(url);
-    const response: AxiosResponse<any> = await firstValueFrom(
-      this.httpService.get<any>(url),
-    );
-    return response;
+    const response: AxiosResponse<Record<string, SteamSpyGame>> =
+      await firstValueFrom(
+        this.httpService.get<Record<string, SteamSpyGame>>(url),
+      );
+    return response.data;
   }
 }

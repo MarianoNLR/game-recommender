@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { OwnedGamesResponseDto } from './dto/owned-games-response.dto';
 import { SteamApiClient } from './steam-api.client';
 import { PrismaService } from 'src/prisma.service';
+import { PlayerSummary, SteamAppDetailsMap, SteamGame, SteamSpyGame } from './steam.types';
 
 @Injectable()
 export class SteamService {
@@ -11,7 +11,7 @@ export class SteamService {
     private readonly prismaService: PrismaService,
   ) {}
 
-  async getOwnedGames(steamId: string): Promise<OwnedGamesResponseDto[]> {
+  async getOwnedGames(steamId: string): Promise<SteamGame[]> {
     // For a given Steam ID, this method would call the Steam API to retrieve the list of owned games.
     const response = await this.steamApiClient.getOwnedGames(steamId);
 
@@ -20,7 +20,7 @@ export class SteamService {
       (game) => game.playtime_forever >= 300,
     );
 
-    return gamesFiltered.map((game: OwnedGamesResponseDto) => ({
+    return gamesFiltered.map((game: SteamGame) => ({
       appid: game.appid,
       name: game.name,
       playtime_forever: game.playtime_forever,
@@ -29,21 +29,24 @@ export class SteamService {
     }));
   }
 
-  async getPlayerSummaries(steamIds: string[]): Promise<any> {
+  async getPlayerSummaries(steamIds: string[]): Promise<PlayerSummary[]> {
     // This method would call the Steam API to retrieve player summaries for a list of Steam IDs.
     const response = await this.steamApiClient.getPlayerSummaries(steamIds);
     return response.response.players;
   }
 
-  async getAppsDetails(appIds: number[]): Promise<any> {
+  async getAppsDetails(appIds: number[]): Promise<SteamAppDetailsMap> {
     // This method would call the Steam API to retrieve details for a list of app IDs.
-    const response = await this.steamApiClient.getAppsDetails(appIds);
+    const response: SteamAppDetailsMap =
+      await this.steamApiClient.getAppsDetails(appIds);
     return response;
   }
 
-  async getAppTags(appIds: number[]): Promise<any> {
+  async getAppTags(
+    appIds: number[],
+  ): Promise<Record<string, Record<string, number>>> {
     // This method would call the Steam API to retrieve tags for a list of app IDs.
-    const data: any = {};
+    const data: Record<string, Record<string, number>> = {};
 
     for (const id of appIds) {
       const cached = await this.prismaService.gameTags.findUnique({
@@ -54,7 +57,7 @@ export class SteamService {
         cached && Date.now() - cached.fetchedAt.getTime() < 24 * 60 * 60 * 1000;
 
       if (isValid) {
-        data[id] = cached.tags;
+        data[id] = cached.tags as Record<string, number>;
         continue;
       }
       const tags = await this.steamApiClient.getAppTags(id);
@@ -72,8 +75,8 @@ export class SteamService {
     return data;
   }
 
-  async getAppsByTag(tag: string): Promise<any> {
+  async getAppsByTag(tag: string): Promise<Record<string, SteamSpyGame>> {
     const response = await this.steamApiClient.getAppsByTag(tag);
-    return response.data;
+    return response;
   }
 }

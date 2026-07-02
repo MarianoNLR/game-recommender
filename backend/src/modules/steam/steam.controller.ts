@@ -1,37 +1,48 @@
 import { Controller, Get, Body, Param, Query } from '@nestjs/common';
 import { SteamService } from './steam.service';
-import { OwnedGamesResponseDto } from './dto/owned-games-response.dto';
+import {
+  PlayerSummary,
+  SteamAppDetailsMap,
+  SteamGame,
+  SteamSpyGame,
+} from './steam.types';
 
 @Controller('steam')
 export class SteamController {
   constructor(private steamService: SteamService) {}
   @Get('owned-games/:steamId')
-  async getOwnedGames(
-    @Param('steamId') steamId: string,
-  ): Promise<OwnedGamesResponseDto[]> {
+  async getOwnedGames(@Param('steamId') steamId: string): Promise<SteamGame[]> {
     return this.steamService.getOwnedGames(steamId);
   }
 
   @Get('player-summaries/:steamIds')
-  async getPlayerSummaries(@Param('steamIds') steamIds: string): Promise<any> {
+  async getPlayerSummaries(
+    @Param('steamIds') steamIds: string,
+  ): Promise<PlayerSummary[]> {
     const steamIdArray = steamIds.split(',');
     return this.steamService.getPlayerSummaries(steamIdArray);
   }
 
   @Get('apps-details')
-  async getAppsDetails(@Query('appIds') appIds: string): Promise<any> {
+  async getAppsDetails(
+    @Query('appIds') appIds: string,
+  ): Promise<SteamAppDetailsMap> {
     const appIdArray = appIds.split(',').map((id) => parseInt(id, 10));
     return this.steamService.getAppsDetails(appIdArray);
   }
 
   @Get('app-tags')
-  async getAppTags(@Query('appIds') appIds: string): Promise<any> {
+  async getAppTags(
+    @Query('appIds') appIds: string,
+  ): Promise<Record<string, Record<string, number>>> {
     const appIdArray = appIds.split(',').map((id) => parseInt(id, 10));
     return this.steamService.getAppTags(appIdArray);
   }
 
   @Get('apps-by-tag')
-  async getAppsByTag(@Query('tag') tag: string): Promise<any> {
+  async getAppsByTag(
+    @Query('tag') tag: string,
+  ): Promise<Record<string, SteamSpyGame>> {
     return this.steamService.getAppsByTag(tag);
   }
 }
