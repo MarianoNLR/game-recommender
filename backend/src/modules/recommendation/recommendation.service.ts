@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { SteamService } from '../steam/steam.service';
 import { GroupsService } from '../groups/groups.service';
+import { SteamGame } from '../steam/steam.types';
+import { MemberProfile, MemberProfileWithTags, MemberTagProfile } from './recommendation.types';
 
 @Injectable()
 export class RecommendationService {
@@ -38,8 +40,8 @@ export class RecommendationService {
     };
   }
 
-  async getMemberProfile(steamId: string) {
-    const games = await this.steamService.getOwnedGames(steamId);
+  async getMemberProfile(steamId: string): Promise<MemberProfile> {
+    const games: SteamGame[] = await this.steamService.getOwnedGames(steamId);
 
     const topGames = games
       .sort((a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0))
@@ -52,8 +54,10 @@ export class RecommendationService {
     };
   }
 
-  async getMemberTagProfile(steamId: string, topGames: any[]) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  async getMemberTagProfile(
+    steamId: string,
+    topGames: SteamGame[],
+  ): Promise<MemberTagProfile> {
     const appIds = topGames.map((game) => game.appid);
     const tagsByAppId = await this.steamService.getAppTags(appIds);
 
@@ -62,13 +66,13 @@ export class RecommendationService {
       const tags = tagsByAppId[game.appid] ?? {};
       const playtime = game.playtime_forever || 0;
 
-      const totalVotes: any = Object.values(tags).reduce(
-        (sum: number, v) => sum + (v as number),
+      const totalVotes: number = Object.values(tags).reduce(
+        (sum, v) => sum + v,
         0,
       );
 
       Object.entries(tags).forEach(([tag, votes]) => {
-        const proportion = (votes as number) / totalVotes;
+        const proportion = totalVotes > 0 ? votes / totalVotes : 0;
         tagScores[tag] = (tagScores[tag] || 0) + playtime * proportion;
       });
     });
@@ -81,7 +85,7 @@ export class RecommendationService {
     return { tagScores, topTags };
   }
 
-  getGroupTagProfile(memberProfiles: any[]) {
+  getGroupTagProfile(memberProfiles: MemberProfileWithTags[]) {
     const groupTagScores: Record<string, number> = {};
 
     memberProfiles.forEach(({ topTags }) => {
@@ -97,7 +101,7 @@ export class RecommendationService {
       .map(([tag]) => tag)
       .slice(0, 10);
 
-    return { memberProfiles, groupTagScores, topGroupTags };
+    return { groupTagScores, topGroupTags };
   }
 
   async getGroupPreferences(accessCode: string) {
@@ -174,10 +178,16 @@ export class RecommendationService {
       ({ appId, tagMatches }) => {
         const details = detailsMap[appId] || {};
         console.log(details);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         return {
-          ...details,
+          appId,
           score: tagMatches,
+          name: details.name || 'Unknown',
+          headerImage: details.header_image || '',
+          shortDescription: details.short_description || '',
+          price: details.price_overview?.final_formatted || null,
+          isFree: details.is_free || false,
+          metacritic: details.recommendations?.total || null,
+          storeUrl: `https://store.steampowered.com/app/${appId}`,
         };
       },
     );
