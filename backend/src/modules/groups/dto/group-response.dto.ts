@@ -1,12 +1,12 @@
 import { Expose, Type } from 'class-transformer';
 
-export class MemberResponseDto {
-  @Expose()
-  id: number;
+// export class MemberResponseDto {
+//   @Expose()
+//   id: number;
 
-  @Expose()
-  steamId: string;
-}
+//   @Expose()
+//   steamId: string;
+// }
 
 export class GroupResponseDto {
   @Expose()
@@ -25,6 +25,6 @@ export class GroupResponseDto {
   expiresAt: Date;
 
   @Expose()
-  @Type(() => MemberResponseDto)
-  members: MemberResponseDto[];
+  // @Type(() => MemberResponseDto)
+  members: string[];
 }

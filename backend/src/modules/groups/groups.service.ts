@@ -26,11 +26,12 @@ export class GroupsService {
         accessCode: randomUUID(),
         createdFromIp: ip,
         expiresAt,
-        members: {
-          create: createGroupDto.memberSteamIds.map((steamId) => ({ steamId })),
-        },
+        memberSteamIds: createGroupDto.memberSteamIds,
+        // members: {
+        //   create: createGroupDto.memberSteamIds.map((steamId) => ({ steamId })),
+        // },
       },
-      include: { members: true },
+      // include: { members: true },
     });
     return plainToInstance(GroupResponseDto, group, {
       excludeExtraneousValues: true,
@@ -39,7 +40,7 @@ export class GroupsService {
 
   async findAll(): Promise<GroupResponseDto[]> {
     const groups = await this.prisma.group.findMany({
-      include: { members: true },
+      // include: { members: true },
     });
     return plainToInstance(GroupResponseDto, groups, {
       excludeExtraneousValues: true,
@@ -49,7 +50,7 @@ export class GroupsService {
   async findOne(accessCode: string): Promise<GroupResponseDto> {
     const group = await this.prisma.group.findUnique({
       where: { accessCode },
-      include: { members: true },
+      // include: { members: true },
     });
 
     if (!group) {
