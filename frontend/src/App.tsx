@@ -14,7 +14,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/create-group" element={<CreateGroupPage />} />
-        <Route path="/recommendations" element={<RecommendationsPage />} />
+        <Route path="/recommendations/:accessCode" element={<RecommendationsPage />} />
       </Routes>
     </>
   )
