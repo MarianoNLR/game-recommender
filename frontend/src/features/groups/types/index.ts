@@ -1,5 +1,11 @@
 import { z } from 'zod'
 
+export interface GroupMember {
+  steamId: string
+  name: string
+  avatarUrl: string
+}
+
 export const createGroupSchema = z.object({
   name: z.string().min(3, 'El nombre debe tener al menos 3 caracteres').max(50),
   budget: z.string().optional(),

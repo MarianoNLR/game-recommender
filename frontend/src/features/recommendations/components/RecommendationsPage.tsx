@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useParams } from 'react-router-dom'
 import { useRecommendations } from '../hooks/useRecommendations'
 
@@ -17,7 +18,7 @@ export default function RecommendationsPage() {
   }
 
   return (
-<main className="min-h-screen bg-background px-4 py-12 max-w-4xl mx-auto">
+    <main className="min-h-screen bg-background px-4 py-12 max-w-4xl mx-auto">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <p className="text-foreground text-xl font-medium">Analizando los juegos del grupo...</p>
@@ -30,7 +31,31 @@ export default function RecommendationsPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          <h1 className="text-3xl font-bold text-foreground">Recomendaciones</h1>
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold text-foreground">{data.group.name}</h1>
+            <div className="flex flex-col items-start gap-4 text-muted-foreground text-sm">
+              {/* <span>Código: <span className="text-foreground font-mono">{data.group.accessCode}</span></span> */}
+              {data.group.budget && <span className="font-medium">Presupuesto por miembro: USD ${data.group.budget}</span>}
+              {data.group.memberSteamIds.length > 0 && (
+                <span className="font-medium">Miembros: {data.group.memberSteamIds.length}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-muted-foreground text-sm">Gustos del grupo</p>
+            <div className="flex flex-wrap gap-2">
+              {data.topGroupTags.map((tag: string) => (
+                <span
+                  key={tag}
+                  className="bg-muted text-muted-foreground text-xs px-2 py-1 rounded-md"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {data?.groupRecommendations?.map((game: any) => (
               <div key={game.appId} className="bg-card rounded-lg overflow-hidden">

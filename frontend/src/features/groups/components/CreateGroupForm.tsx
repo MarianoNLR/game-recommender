@@ -1,16 +1,20 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createGroupSchema } from '../types'
-import type { CreateGroupFormValues } from '../types'
+import type { CreateGroupFormValues, GroupMember } from '../types'
 import { useCreateGroup } from '../hooks/useCreateGroup'
+import { useValidateMember } from '../hooks/useValidatemember'
 
 export default function CreateGroupForm() {
   const [steamIdInput, setSteamIdInput] = useState('')
+  const { mutate: validate, isPending: isValidating } = useValidateMember()
   const { mutate: createGroup, isPending } = useCreateGroup()
+  const [members, setMembers] = useState<GroupMember[]>([])
+  const [steamIdError, setSteamIdError] = useState('')
 
   const {
     register,
@@ -34,11 +38,30 @@ export default function CreateGroupForm() {
     if (!trimmed) return
     if (memberSteamIds.includes(trimmed)) return
     if (memberSteamIds.length >= 12) return
-    setValue('memberSteamIds', [...memberSteamIds, trimmed])
-    setSteamIdInput('')
+    validate(trimmed, {
+    onSuccess: (data) => {
+      if (!data.isValid) {
+        setSteamIdError(data.reason)
+        return
+      }
+      const newMember: GroupMember = {
+        steamId: data.steamId,
+        name: data.name,
+        avatarUrl: data.avatarUrl,
+      }
+      setMembers([...members, newMember])
+      setValue('memberSteamIds', [...memberSteamIds, trimmed])
+      setSteamIdInput('')
+      setSteamIdError('')
+    },
+    onError: () => {
+      setSteamIdError('Error al validar el SteamID')
+    },
+  })
   }
 
   const removeMember = (steamId: string) => {
+    setMembers((prev) => prev.filter((m) => m.steamId !== steamId))
     setValue('memberSteamIds', memberSteamIds.filter((id) => id !== steamId))
   }
 
@@ -77,18 +100,28 @@ export default function CreateGroupForm() {
               }
             }}
           />
-          <Button type="button" className="cursor-pointer" variant="outline" size="icon" onClick={addMember}>
-            <Plus className="h-4 w-4" />
+          <Button type="button" className="cursor-pointer" variant="outline" size="icon" onClick={addMember} disabled={isValidating}>
+            {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           </Button>
         </div>
+        {steamIdError && <p className="text-destructive text-sm">{steamIdError}</p>}
         <div className="flex flex-wrap gap-2 mt-2">
-          {memberSteamIds.map((id) => (
+          {members.map((member) => (
             <div
-              key={id}
-              className="flex items-center gap-1 bg-muted text-muted-foreground text-sm px-2 py-1 rounded-md"
+              key={member.steamId}
+              className="flex items-center gap-2 bg-muted text-muted-foreground text-sm px-2 py-1 rounded-md"
             >
-              <span>{id}</span>
-              <button type="button" className="cursor-pointer hover:text-foreground" onClick={() => removeMember(id)}>
+              <img
+                src={member.avatarUrl}
+                alt={member.name}
+                className="w-5 h-5 rounded-full"
+              />
+              <span>{member.name}</span>
+              <button
+                type="button"
+                onClick={() => removeMember(member.steamId)}
+                className="hover:text-foreground"
+              >
                 <X className="h-3 w-3" />
               </button>
             </div>

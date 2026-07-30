@@ -15,3 +15,9 @@ export async function createGroup(data: {
 
   return response.json()
 }
+
+export async function validateMember(steamId: string) {
+  const response = await fetch(`${BASE_URL}/steam/validate-member/${steamId}`)
+  if (!response.ok) throw new Error('Error al validar el miembro')
+  return response.json()
+}
