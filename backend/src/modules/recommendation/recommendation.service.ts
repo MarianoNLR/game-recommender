@@ -15,12 +15,12 @@ export class RecommendationService {
     // This method will retrieve the group profile,
     // including the list of members and their owned games, based on the provided access code.
     const group = await this.groupsService.findOne(accessCode);
-
-    const groupSteamIds = group.members.map((member) => member.steamId);
-    console.log('Group Steam IDs:', groupSteamIds);
+    console.log('Group:', group);
+    //const groupSteamIds = group.memberSteamIds.map((steamId) => steamId);
+    //console.log('Group Steam IDs:', groupSteamIds);
 
     const memberProfiles = await Promise.all(
-      groupSteamIds.map(async (steamId) => {
+      group.memberSteamIds.map(async (steamId) => {
         const profile = await this.getMemberProfile(steamId);
         const tagProfile = await this.getMemberTagProfile(
           steamId,
@@ -33,7 +33,7 @@ export class RecommendationService {
     const { groupTagScores, topGroupTags } =
       this.getGroupTagProfile(memberProfiles);
     return {
-      //group,
+      group,
       memberProfiles,
       groupTagScores,
       topGroupTags,
@@ -134,7 +134,7 @@ export class RecommendationService {
 
   async getGroupRecommendations(accessCode: string) {
     // This method will generate game recommendations for the group based on the provided access code.
-    const { memberProfiles, groupTagScores, topGroupTags } =
+    const { group, memberProfiles, groupTagScores, topGroupTags } =
       await this.getGroupProfile(accessCode);
     console.log(memberProfiles, groupTagScores, topGroupTags);
 
@@ -192,6 +192,12 @@ export class RecommendationService {
       },
     );
     return {
+      group: {
+        name: group.name,
+        accessCode: group.accessCode,
+        budget: group.budget,
+        memberSteamIds: group.memberSteamIds,
+      },
       topGroupTags: tagsToSearch,
       groupRecommendations: recommendationsResponse,
     };
