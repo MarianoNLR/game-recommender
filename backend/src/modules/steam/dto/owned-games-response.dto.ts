@@ -1,5 +1,5 @@
 export class OwnedGamesResponseDto {
-  appid: number | undefined;
+  appid: number;
   name: string | undefined;
   img_icon_url: string | undefined;
   playtime_forever: number | undefined;
