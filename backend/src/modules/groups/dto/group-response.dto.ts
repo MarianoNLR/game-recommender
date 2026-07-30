@@ -26,5 +26,5 @@ export class GroupResponseDto {
 
   @Expose()
   // @Type(() => MemberResponseDto)
-  members: string[];
+  memberSteamIds: string[];
 }
