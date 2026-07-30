@@ -22,6 +22,7 @@ export interface PlayerSummary {
   personastate: number;
   lastlogoff: number;
   commentpermission: number;
+  communityvisibilitystate: number;
 }
 
 export interface SteamGame {
