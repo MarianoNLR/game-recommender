@@ -2,6 +2,8 @@ import { SteamAppDetails, SteamGame } from '../steam/steam.types';
 
 export interface MemberProfile {
   steamId: string;
+  name: string;
+  avatarUrl: string;
   games: SteamGame[];
   topGames: SteamGame[];
 }
