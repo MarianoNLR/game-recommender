@@ -6,6 +6,7 @@ import {
   SteamGame,
   SteamSpyGame,
 } from './steam.types';
+import { GameDetailsResponseMap } from '../game/game.types';
 
 @Controller('steam')
 export class SteamController {
@@ -53,7 +54,7 @@ export class SteamController {
   @Get('apps-details')
   async getAppsDetails(
     @Query('appIds') appIds: string,
-  ): Promise<SteamAppDetailsMap> {
+  ): Promise<GameDetailsResponseMap> {
     const appIdArray = appIds.split(',').map((id) => parseInt(id, 10));
     return this.steamService.getAppsDetails(appIdArray);
   }

@@ -2,7 +2,6 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosResponse } from 'axios';
 import {
-  SteamAppDetailsMap,
   GetOwnedGamesResponse,
   SteamAppDetails,
   SteamPlayerSummaryResponse,
@@ -12,6 +11,8 @@ import {
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config/dist/config.service';
 import { PrismaService } from 'src/prisma.service';
+import { GameService } from '../game/game.service';
+import { GameDetailsCache, GameDetailsResponseMap } from '../game/game.types';
 
 @Injectable()
 export class SteamApiClient {
@@ -21,6 +22,7 @@ export class SteamApiClient {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly prismaService: PrismaService,
+    private readonly gameService: GameService,
   ) {
     this.apiKey = this.configService.get<string>('STEAM_API_KEY') ?? '';
   }
@@ -49,43 +51,72 @@ export class SteamApiClient {
     return response.data;
   }
 
-  async getAppsDetails(appId: number[]): Promise<SteamAppDetailsMap> {
-    // TODO: implement batching for large number of appIds to avoid hitting rate limits.
-    const data: SteamAppDetailsMap = {};
-    for (const id of appId) {
-      console.log(`Fetching details for app ID: ${id}`);
+  async getAppsDetails(appIds: number[]): Promise<GameDetailsResponseMap> {
+    const data: GameDetailsResponseMap = {};
+
+    for (const id of appIds) {
+      const cached = await this.gameService.findByAppId(id);
+
+      if (cached && cached.details && this.gameService.isCacheValid(cached)) {
+        const details = cached.details as unknown as GameDetailsCache;
+
+        data[id] = {
+          appId: cached.appId,
+          name: cached.name ?? 'Unknown',
+          price: cached.price,
+          ...details,
+        };
+
+        continue;
+      }
+
       const url = `https://store.steampowered.com/api/appdetails?appids=${id}&cc=us`;
+
       const response: AxiosResponse<SteamAppDetails> = await firstValueFrom(
         this.httpService.get<SteamAppDetails>(url),
       );
-      console.log(response.data);
-      const { success } = response.data[id];
-      if (!success) continue;
+
+      const app = response.data[id];
+
+      if (!app?.success) continue;
+
       const {
         type,
         name,
-        steam_appid,
         is_free,
         short_description,
         header_image,
         price_overview,
         recommendations,
-      } = response.data[id].data;
+      } = app.data;
 
-      data[id] = {
+      const details: GameDetailsCache = {
         type,
-        name,
-        steam_appid,
-        is_free,
-        short_description,
-        header_image,
-        price_overview,
+        isFree: is_free,
+        shortDescription: short_description,
+        headerImage: header_image,
         recommendations,
       };
+
+      await this.gameService.upsert(id, {
+        name,
+        price: price_overview?.final ?? null,
+        details,
+        fetchedAt: new Date(),
+      });
+
+      data[id] = {
+        appId: id,
+        name,
+        price: price_overview?.final ?? null,
+        ...details,
+      };
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
     }
+
     return data;
   }
-
   async getAppTags(appId: number): Promise<Record<string, number>> {
     // TODO: implement batching and caching to avoid rate limits and improve performance.
     const url = `https://steamspy.com/api.php?request=appdetails&appid=${appId}`;
