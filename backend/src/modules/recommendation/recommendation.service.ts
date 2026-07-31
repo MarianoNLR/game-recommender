@@ -1,8 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { SteamService } from '../steam/steam.service';
 import { GroupsService } from '../groups/groups.service';
 import { SteamGame } from '../steam/steam.types';
-import { MemberProfile, MemberProfileWithTags, MemberTagProfile } from './recommendation.types';
+import {
+  MemberProfile,
+  MemberProfileWithTags,
+  MemberTagProfile,
+} from './recommendation.types';
+import { GameRecommendationResponse } from '../game/game.types';
+import {
+  EXCLUDED_PROFILE_TAGS,
+  REQUIRED_MULTIPLAYER_TAGS,
+} from './recommendation.constants';
 
 @Injectable()
 export class RecommendationService {
@@ -29,7 +38,7 @@ export class RecommendationService {
         return { ...profile, ...tagProfile };
       }),
     );
-
+    console.log('Member Profiles:', memberProfiles);
     const { groupTagScores, topGroupTags } =
       this.getGroupTagProfile(memberProfiles);
     return {
@@ -42,13 +51,23 @@ export class RecommendationService {
 
   async getMemberProfile(steamId: string): Promise<MemberProfile> {
     const games: SteamGame[] = await this.steamService.getOwnedGames(steamId);
+    const playerSummaries = await this.steamService.getPlayerSummaries([
+      steamId,
+    ]);
+    const player = playerSummaries[0];
+
+    if (!games || games.length === 0) {
+      throw new BadRequestException(`No games found for Steam ID: ${steamId}`);
+    }
 
     const topGames = games
       .sort((a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0))
-      .slice(0, 3);
+      .slice(0, 10);
 
     return {
       steamId,
+      name: player.personaname,
+      avatarUrl: player.avatarmedium,
       games,
       topGames,
     };
@@ -72,6 +91,8 @@ export class RecommendationService {
       );
 
       Object.entries(tags).forEach(([tag, votes]) => {
+        if (EXCLUDED_PROFILE_TAGS.has(tag)) return;
+
         const proportion = totalVotes > 0 ? votes / totalVotes : 0;
         tagScores[tag] = (tagScores[tag] || 0) + playtime * proportion;
       });
@@ -104,42 +125,13 @@ export class RecommendationService {
     return { groupTagScores, topGroupTags };
   }
 
-  async getGroupPreferences(accessCode: string) {
-    // This method will retrieve the group preferences based on the provided access code.
-    // const { group, topGamesByMember, topAppIds } = await this.getGroupProfile(accessCode);
-    // const tagsByAppId = await this.steamService.getAppTags(topAppIds);
-    // console.log(tagsByAppId);
-    // const groupTagProfile: Record<string, number> = {};
-    // topGamesByMember.forEach(({ topGames }) => {
-    //   topGames.forEach((game) => {
-    //     const tags = tagsByAppId[game.appid] ?? {};
-    //     const playtime = game.playtime_forever || 0;
-    //     console.log(tags);
-    //     Object.entries(tags).forEach(([tag, votes]) => {
-    //       const weight = playtime * (votes as number);
-    //       groupTagProfile[tag] = (groupTagProfile[tags] || 0) + weight;
-    //     });
-    //   });
-    // });
-    // //const appDetails = await this.steamService.getAppsDetails(topAppIds);
-    // const sortedTags = Object.entries(groupTagProfile)
-    //   .sort(([, a], [, b]) => b - a)
-    //   .map(([tag]) => tag);
-    // return {
-    //   // group,
-    //   groupTagProfile,
-    //   topTags: sortedTags.slice(0, 10),
-    // };
-  }
-
   async getGroupRecommendations(accessCode: string) {
     // This method will generate game recommendations for the group based on the provided access code.
     const { group, memberProfiles, groupTagScores, topGroupTags } =
       await this.getGroupProfile(accessCode);
-    console.log(memberProfiles, groupTagScores, topGroupTags);
 
     // Group Top Tags to search in steamspy
-    const tagsToSearch = topGroupTags.slice(0, 5);
+    const tagsToSearch = topGroupTags.slice(0, 10);
 
     // Search games by tag
     const candidatesByTag = await Promise.all(
@@ -149,7 +141,7 @@ export class RecommendationService {
       }),
     );
 
-    // Count wieight of each candidate using index of tag.
+    // Count weight of each candidate using index of tag.
     const appearances: Record<string, number> = {};
     candidatesByTag.forEach((games, index) => {
       const weight = tagsToSearch.length - index;
@@ -165,41 +157,81 @@ export class RecommendationService {
       games.forEach((game) => ownedAppIds.add(game.appid));
     });
 
-    const recommendations = Object.entries(appearances)
+    const candidates = Object.entries(appearances)
       .filter(([appId]) => !ownedAppIds.has(Number(appId)))
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([appId, count]) => ({ appId: Number(appId), tagMatches: count }));
+      .sort(([, a], [, b]) => b - a);
 
-    const appIds = recommendations.map(({ appId }) => appId);
-    const detailsMap = await this.steamService.getAppsDetails(appIds);
-    console.log(detailsMap);
-    const recommendationsResponse = recommendations.map(
-      ({ appId, tagMatches }) => {
-        const details = detailsMap[appId] || {};
-        console.log(details);
-        return {
-          appId,
-          score: tagMatches,
-          name: details.name || 'Unknown',
-          headerImage: details.header_image || '',
-          shortDescription: details.short_description || '',
-          price: details.price_overview?.final_formatted || null,
-          isFree: details.is_free || false,
-          metacritic: details.recommendations?.total || null,
-          storeUrl: `https://store.steampowered.com/app/${appId}`,
-        };
-      },
-    );
+    const recommendationsResponse: GameRecommendationResponse[] = [];
+
+    for (const [appIdStr, tagMatches] of candidates) {
+      const appId = Number(appIdStr);
+
+      const tags = await this.steamService.getAppTags([appId]);
+
+      const gameTags = tags[appId] ?? {};
+
+      const hasMultiplayerTag = Object.keys(gameTags).some((tag) =>
+        REQUIRED_MULTIPLAYER_TAGS.has(tag),
+      );
+
+      if (!hasMultiplayerTag) {
+        continue;
+      }
+
+      const detailsMap = await this.steamService.getAppsDetails([appId]);
+      const details = detailsMap[appId];
+
+      if (details.type !== 'game') continue;
+
+      if (!details) continue;
+
+      // If the game is free, discard (at the moment)
+      if (details.isFree) {
+        continue;
+      }
+
+      // If has no price, discard
+      if (details.price == null) continue;
+
+      // If price is greater than group budget, discard
+      if (group.budget != null && details.price / 100 > group.budget) {
+        continue;
+      }
+
+      recommendationsResponse.push({
+        appId,
+        score: tagMatches,
+        name: details.name,
+        headerImage: details.headerImage,
+        shortDescription: details.shortDescription,
+        price: details.price,
+        formattedPrice:
+          details.price != null ? `$${(details.price / 100).toFixed(2)}` : null,
+        isFree: details.isFree,
+        metacritic: details.recommendations?.total ?? null,
+        storeUrl: `https://store.steampowered.com/app/${appId}`,
+      });
+
+      if (recommendationsResponse.length === 10) {
+        break;
+      }
+    }
+
+    console.log({ recommendations: recommendationsResponse });
     return {
       group: {
         name: group.name,
         accessCode: group.accessCode,
         budget: group.budget,
-        memberSteamIds: group.memberSteamIds,
+        members: memberProfiles.map(({ steamId, name, avatarUrl }) => ({
+          steamId,
+          name,
+          avatarUrl,
+        })),
       },
       topGroupTags: tagsToSearch,
       groupRecommendations: recommendationsResponse,
+      groupTagScores,
     };
   }
 }
