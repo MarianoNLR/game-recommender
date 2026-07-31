@@ -26,8 +26,11 @@ model Group {
   memberSteamIds String[]
 }
 
-model GameTags {
+model Game {
   appId Int @id
-  tags Json
+  name String?
+  tags Json?
+  price Int?
+  details Json?
   fetchedAt DateTime @default(now())
 }
