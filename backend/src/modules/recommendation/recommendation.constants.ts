@@ -15,4 +15,5 @@ export const REQUIRED_MULTIPLAYER_TAGS = new Set([
   'Local Co-Op',
   'PvP',
   'PvE',
+  'Team-Based',
 ]);
