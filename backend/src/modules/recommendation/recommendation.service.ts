@@ -162,7 +162,7 @@ export class RecommendationService {
       .sort(([, a], [, b]) => b - a);
 
     const recommendationsResponse: GameRecommendationResponse[] = [];
-
+    let cont = 0;
     for (const [appIdStr, tagMatches] of candidates) {
       const appId = Number(appIdStr);
 
@@ -180,7 +180,8 @@ export class RecommendationService {
 
       const detailsMap = await this.steamService.getAppsDetails([appId]);
       const details = detailsMap[appId];
-
+      cont = cont + 1;
+      console.log('Search number: ', cont);
       if (details.type !== 'game') continue;
 
       if (!details) continue;
@@ -198,6 +199,13 @@ export class RecommendationService {
         continue;
       }
 
+      if (details.recommendations?.total == null) {
+        continue;
+      }
+
+      if (details.recommendations?.total < 10000) {
+        continue;
+      }
       recommendationsResponse.push({
         appId,
         score: tagMatches,
@@ -211,8 +219,9 @@ export class RecommendationService {
         metacritic: details.recommendations?.total ?? null,
         storeUrl: `https://store.steampowered.com/app/${appId}`,
       });
+      console.log('Recommendation found!', recommendationsResponse.length);
 
-      if (recommendationsResponse.length === 10) {
+      if (recommendationsResponse.length === 20) {
         break;
       }
     }
