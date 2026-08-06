@@ -3,21 +3,26 @@ import { SteamService } from '../steam/steam.service';
 import { GroupsService } from '../groups/groups.service';
 import { SteamGame } from '../steam/steam.types';
 import {
+  GameRecommendation,
+  GroupRecommendationResponse,
   MemberProfile,
   MemberProfileWithTags,
   MemberTagProfile,
 } from './recommendation.types';
-import { GameRecommendationResponse } from '../game/game.types';
+import { GameDetailsResponse } from '../game/game.types';
 import {
   EXCLUDED_PROFILE_TAGS,
   REQUIRED_MULTIPLAYER_TAGS,
+  EXCLUDED_GAME_TAGS,
 } from './recommendation.constants';
+import { GameService } from '../game/game.service';
 
 @Injectable()
 export class RecommendationService {
   constructor(
     private steamService: SteamService,
     private groupsService: GroupsService,
+    private gameService: GameService,
   ) {}
 
   async getGroupProfile(accessCode: string) {
@@ -38,9 +43,9 @@ export class RecommendationService {
         return { ...profile, ...tagProfile };
       }),
     );
-    console.log('Member Profiles:', memberProfiles);
+
     const { groupTagScores, topGroupTags } =
-      this.getGroupTagProfile(memberProfiles);
+      await this.getGroupTagProfile(memberProfiles);
     return {
       group,
       memberProfiles,
@@ -62,7 +67,7 @@ export class RecommendationService {
 
     const topGames = games
       .sort((a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0))
-      .slice(0, 10);
+      .slice(0, 20);
 
     return {
       steamId,
@@ -101,12 +106,11 @@ export class RecommendationService {
     const topTags = Object.entries(tagScores)
       .sort(([, a], [, b]) => b - a)
       .map(([tag]) => tag)
-      .slice(0, 10);
-
+      .slice(0, 20);
     return { tagScores, topTags };
   }
 
-  getGroupTagProfile(memberProfiles: MemberProfileWithTags[]) {
+  async getGroupTagProfile(memberProfiles: MemberProfileWithTags[]) {
     const groupTagScores: Record<string, number> = {};
 
     memberProfiles.forEach(({ topTags }) => {
@@ -120,113 +124,141 @@ export class RecommendationService {
     const topGroupTags = Object.entries(groupTagScores)
       .sort(([, a], [, b]) => b - a)
       .map(([tag]) => tag)
-      .slice(0, 10);
+      .slice(0, 20);
+
+    console.log('Unique group tags:', Object.keys(groupTagScores).length);
+
+    console.log('Group tags:', groupTagScores);
+
+    console.log('Top group tags count:', topGroupTags.length);
 
     return { groupTagScores, topGroupTags };
   }
 
   async getGroupRecommendations(accessCode: string) {
+    console.time('Get Recommendations');
     // This method will generate game recommendations for the group based on the provided access code.
     const { group, memberProfiles, groupTagScores, topGroupTags } =
       await this.getGroupProfile(accessCode);
 
     // Group Top Tags to search in steamspy
-    const tagsToSearch = topGroupTags.slice(0, 10);
+    const tagsToSearch = topGroupTags.slice(0, 15);
+    console.log('Tags to search:', tagsToSearch);
 
-    // Search games by tag
-    const candidatesByTag = await Promise.all(
-      tagsToSearch.map((tag) => {
-        const result = this.steamService.getAppsByTag(tag);
-        return result;
-      }),
-    );
-
-    // Count weight of each candidate using index of tag.
-    const appearances: Record<string, number> = {};
-    candidatesByTag.forEach((games, index) => {
-      const weight = tagsToSearch.length - index;
-      Object.keys(games).forEach((appid) => {
-        const id = Number(appid);
-        appearances[id] = (appearances[id] || 0) + weight;
-      });
-    });
-
+    const recommendationsResponse: GroupRecommendationResponse = {
+      paidRecommendations: [],
+      freeRecommendations: [],
+    };
     // Set with group's owned games
     const ownedAppIds = new Set<number>();
     memberProfiles.forEach(({ games }) => {
       games.forEach((game) => ownedAppIds.add(game.appid));
     });
 
-    const candidates = Object.entries(appearances)
-      .filter(([appId]) => !ownedAppIds.has(Number(appId)))
-      .sort(([, a], [, b]) => b - a);
+    const candidates = (await this.gameService.getAppsByTags(tagsToSearch))
+      .filter((game) => !ownedAppIds.has(game.appId))
+      .map((game) => {
+        const relevantTags = this.getRelevantTags(
+          (game.tags as Record<string, number>) ?? {},
+        );
 
-    const recommendationsResponse: GameRecommendationResponse[] = [];
-    let cont = 0;
-    for (const [appIdStr, tagMatches] of candidates) {
-      const appId = Number(appIdStr);
+        const tagScore = tagsToSearch.reduce((score, tag, index) => {
+          if (relevantTags[tag] !== undefined) {
+            return score + (tagsToSearch.length - index);
+          }
 
-      const tags = await this.steamService.getAppTags([appId]);
+          return score;
+        }, 0);
 
-      const gameTags = tags[appId] ?? {};
+        const matchScore = this.calculateMatchScore(
+          groupTagScores,
+          relevantTags,
+        );
 
-      const hasMultiplayerTag = Object.keys(gameTags).some((tag) =>
-        REQUIRED_MULTIPLAYER_TAGS.has(tag),
-      );
-
-      if (!hasMultiplayerTag) {
-        continue;
-      }
-
-      const detailsMap = await this.steamService.getAppsDetails([appId]);
-      const details = detailsMap[appId];
-      cont = cont + 1;
-      console.log('Search number: ', cont);
-      if (details.type !== 'game') continue;
-
-      if (!details) continue;
-
-      // If the game is free, discard (at the moment)
-      if (details.isFree) {
-        continue;
-      }
-
-      // If has no price, discard
-      if (details.price == null) continue;
-
-      // If price is greater than group budget, discard
-      if (group.budget != null && details.price / 100 > group.budget) {
-        continue;
-      }
-
-      if (details.recommendations?.total == null) {
-        continue;
-      }
-
-      if (details.recommendations?.total < 10000) {
-        continue;
-      }
-      recommendationsResponse.push({
-        appId,
-        score: tagMatches,
-        name: details.name,
-        headerImage: details.headerImage,
-        shortDescription: details.shortDescription,
-        price: details.price,
-        formattedPrice:
-          details.price != null ? `$${(details.price / 100).toFixed(2)}` : null,
-        isFree: details.isFree,
-        metacritic: details.recommendations?.total ?? null,
-        storeUrl: `https://store.steampowered.com/app/${appId}`,
-      });
-      console.log('Recommendation found!', recommendationsResponse.length);
-
-      if (recommendationsResponse.length === 20) {
+        return {
+          ...game,
+          relevantTags,
+          tagScore,
+          matchScore,
+          finalScore: matchScore * 0.4 + tagScore * 0.6,
+        };
+      })
+      .sort((a, b) => b.finalScore - a.finalScore);
+    const recommendedSteamAppIds = new Set<number>();
+    for (const candidate of candidates) {
+      if (recommendedSteamAppIds.size >= 40) {
         break;
       }
-    }
+      const appId = candidate.appId;
+      const finalScore = candidate.finalScore;
 
-    console.log({ recommendations: recommendationsResponse });
+      const details = await this.steamService
+        .getAppsDetails([appId])
+        .then((map) => map[appId]);
+
+      if (!details) {
+        console.log(`Rejected: No details | AppId: ${appId}`);
+        continue;
+      }
+
+      // Validations
+      const candidateRejection = this.validateCandidate(
+        details,
+        candidate.relevantTags,
+      );
+
+      if (candidateRejection) {
+        console.log(
+          `Rejected: ${candidateRejection} | AppId: ${appId} | score: ${finalScore}`,
+        );
+        continue;
+      }
+
+      // Avoid duplicates in recommendations by checking if the game has already been recommended based on its Steam App ID.
+      if (recommendedSteamAppIds.has(details.steamAppId)) {
+        console.log(`Rejected: Already recommended | AppId: ${appId}`);
+        continue;
+      }
+
+      // Free games are treated differently. +
+      // If the game is free, it is added to the free recommendations list if there is space (less than 20 recommendations).
+      // Otherwise, it is skipped.
+      if (details.isFree) {
+        if (recommendationsResponse.freeRecommendations.length < 20) {
+          recommendationsResponse.freeRecommendations.push(
+            this.buildRecommendation(appId, finalScore || 0, details),
+          );
+          recommendedSteamAppIds.add(details.steamAppId);
+        }
+
+        continue;
+      }
+
+      // Validations for paid games.
+      const paidRejection = this.validatePaidGame(details, group.budget);
+
+      if (paidRejection) {
+        console.log(
+          `Rejected: ${paidRejection} | AppId: ${appId} | score: ${finalScore}`,
+        );
+        continue;
+      }
+
+      console.count('Recommendation found!');
+
+      if (recommendationsResponse.paidRecommendations.length >= 20) {
+        continue;
+      }
+
+      recommendationsResponse.paidRecommendations.push(
+        this.buildRecommendation(appId, finalScore || 0, details),
+      );
+      recommendedSteamAppIds.add(details.steamAppId);
+    }
+    // console.log({ recommendations: recommendationsResponse });
+    console.timeEnd('Get Recommendations');
+    console.log('Recommendations found at candidate positions:');
+
     return {
       group: {
         name: group.name,
@@ -238,9 +270,118 @@ export class RecommendationService {
           avatarUrl,
         })),
       },
-      topGroupTags: tagsToSearch,
+      topGroupTags: topGroupTags,
       groupRecommendations: recommendationsResponse,
       groupTagScores,
     };
+  }
+
+  private validateCandidate(
+    details: GameDetailsResponse,
+    relevantTags: Record<string, number> = {},
+  ): string | null {
+    const hasMultiplayerTag = Object.keys(relevantTags).some((tag) =>
+      REQUIRED_MULTIPLAYER_TAGS.has(tag),
+    );
+
+    if (!hasMultiplayerTag) return 'No multiplayer tag';
+
+    if (Object.keys(relevantTags).some((tag) => EXCLUDED_GAME_TAGS.has(tag))) {
+      return (
+        'Has excluded tag: ' +
+        Object.keys(relevantTags).find((tag) => EXCLUDED_GAME_TAGS.has(tag))
+      );
+    }
+
+    if (details.type !== 'game') return 'Not a game';
+
+    return null;
+  }
+
+  private validatePaidGame(
+    details: GameDetailsResponse,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    budget: number | null,
+  ): string | null {
+    if (details.price == null) {
+      return 'No price';
+    }
+    // if (budget != null && details.price / 100 > budget) {
+    //   return 'Price greater than budget';
+    // }
+
+    if (details.recommendations?.total == null) {
+      return 'No recommendation data';
+    }
+
+    if (details.recommendations.total < 5000) {
+      return 'Not enough Steam recommendations';
+    }
+
+    return null;
+  }
+
+  private buildRecommendation(
+    appId: number,
+    score: number,
+    details: GameDetailsResponse,
+  ): GameRecommendation {
+    return {
+      appId,
+      steamAppId: details.steamAppId,
+      score,
+      name: details.name,
+      headerImage: details.headerImage,
+      shortDescription: details.shortDescription,
+      price: details.price,
+      formattedPrice:
+        details.price != null ? `$${(details.price / 100).toFixed(2)}` : null,
+      isFree: details.isFree,
+      metacritic: details.recommendations?.total ?? null,
+      storeUrl: `https://store.steampowered.com/app/${appId}`,
+    };
+  }
+  private calculateMatchScore(
+    groupTagScores: Record<string, number>,
+    gameTags: Record<string, number>,
+  ): number {
+    const totalGroupScore = Object.values(groupTagScores).reduce(
+      (a, b) => a + b,
+      0,
+    );
+    const totalGameVotes = Object.values(gameTags).reduce((a, b) => a + b, 0);
+
+    if (totalGroupScore === 0 || totalGameVotes === 0) return 0;
+
+    let score = 0;
+
+    for (const [tag, gameVotes] of Object.entries(gameTags)) {
+      if (!groupTagScores[tag]) continue;
+
+      // How representative this tag is for the group
+      const groupWeight = groupTagScores[tag] / totalGroupScore;
+
+      // How representative this tag is for the game
+      const gameWeight = gameVotes / totalGameVotes;
+
+      // Both has to be representative for the group and the game to have a high score.
+      score += groupWeight * gameWeight;
+    }
+
+    return score;
+  }
+
+  private getRelevantTags(
+    tags: Record<string, number>,
+    topN: number = 10,
+  ): Record<string, number> {
+    const total = Object.values(tags).reduce((a, b) => a + b, 0);
+
+    return Object.fromEntries(
+      Object.entries(tags)
+        .map(([tag, votes]) => [tag, votes / total] as [string, number])
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, topN),
+    );
   }
 }
