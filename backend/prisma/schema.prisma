@@ -7,6 +7,7 @@ generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
   moduleFormat = "cjs"
+  importFileExtension = "ts"
 }
 
 datasource db {
@@ -28,9 +29,13 @@ model Group {
 
 model Game {
   appId Int @id
+  steamAppId Int?
   name String?
   tags Json?
   price Int?
   details Json?
+
+  tagsFetched Boolean @default(false)
+  detailsFetched Boolean @default(false)
   fetchedAt DateTime @default(now())
 }
