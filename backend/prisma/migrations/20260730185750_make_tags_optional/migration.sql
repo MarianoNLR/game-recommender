@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "Game" ALTER COLUMN "tags" DROP NOT NULL;
