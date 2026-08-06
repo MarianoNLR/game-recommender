@@ -10,6 +10,7 @@ export interface GameDetailsCache {
 
 export interface GameDetailsResponse extends GameDetailsCache {
   appId: number;
+  steamAppId: number;
   name: string;
   price: number | null;
 }
@@ -18,6 +19,7 @@ export type GameDetailsResponseMap = Record<number, GameDetailsResponse>;
 
 export interface GameRecommendationResponse {
   appId: number;
+  steamAppId: number;
   score: number;
   name: string;
   headerImage: string;
