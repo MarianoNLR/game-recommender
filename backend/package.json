@@ -17,7 +17,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "import:steamspy": "ts-node -r tsconfig-paths/register src/scripts/import-steamspy.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
@@ -33,6 +34,7 @@
     "dotenv": "^17.4.2",
     "node-fecth": "0.0.1-security",
     "node-fetch": "^3.3.2",
+    "p-limit": "^3.1.0",
     "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
