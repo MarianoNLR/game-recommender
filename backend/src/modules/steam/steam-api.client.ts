@@ -54,14 +54,16 @@ export class SteamApiClient {
   async getAppsDetails(appIds: number[]): Promise<GameDetailsResponseMap> {
     const data: GameDetailsResponseMap = {};
 
-    for (const id of appIds) {
-      const cached = await this.gameService.findByAppId(id);
+    for (const appId of appIds) {
+      const cached = await this.gameService.findByAppId(appId);
 
       if (cached && cached.details && this.gameService.isCacheValid(cached)) {
+        console.count('Cache hit');
         const details = cached.details as unknown as GameDetailsCache;
 
-        data[id] = {
+        data[appId] = {
           appId: cached.appId,
+          steamAppId: cached.steamAppId || appId,
           name: cached.name ?? 'Unknown',
           price: cached.price,
           ...details,
@@ -70,18 +72,23 @@ export class SteamApiClient {
         continue;
       }
 
-      const url = `https://store.steampowered.com/api/appdetails?appids=${id}&cc=us`;
+      console.count('Steam request');
+
+      const url = `https://store.steampowered.com/api/appdetails?appids=${appId}&cc=us`;
 
       const response: AxiosResponse<SteamAppDetails> = await firstValueFrom(
         this.httpService.get<SteamAppDetails>(url),
       );
 
-      const app = response.data[id];
+      const app = response.data[appId];
 
-      if (!app?.success) continue;
+      if (!app?.success || app.data.type !== 'game') {
+        continue;
+      }
 
       const {
         type,
+        steam_appid,
         name,
         is_free,
         short_description,
@@ -98,25 +105,28 @@ export class SteamApiClient {
         recommendations,
       };
 
-      await this.gameService.upsert(id, {
+      await this.gameService.upsert(appId, {
+        steamAppId: steam_appid,
         name,
         price: price_overview?.final ?? null,
         details,
         fetchedAt: new Date(),
       });
 
-      data[id] = {
-        appId: id,
+      data[appId] = {
+        appId,
+        steamAppId: steam_appid,
         name,
         price: price_overview?.final ?? null,
         ...details,
       };
 
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
     return data;
   }
+
   async getAppTags(appId: number): Promise<Record<string, number>> {
     // TODO: implement batching and caching to avoid rate limits and improve performance.
     const url = `https://steamspy.com/api.php?request=appdetails&appid=${appId}`;
