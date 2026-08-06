@@ -17,3 +17,5 @@ export const REQUIRED_MULTIPLAYER_TAGS = new Set([
   'PvE',
   'Team-Based',
 ]);
+
+export const EXCLUDED_GAME_TAGS = new Set(['VR']);

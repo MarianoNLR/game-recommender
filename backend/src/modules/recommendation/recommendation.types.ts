@@ -17,17 +17,30 @@ export type MemberProfileWithTags = MemberProfile & MemberTagProfile;
 
 export interface GameRecommendation {
   appId: number;
+  steamAppId: number;
   score: number;
   name: string;
   headerImage: string;
   shortDescription: string;
-  price: string | null;
+  price: number | null;
+  formattedPrice: string | null;
   isFree: boolean;
   metacritic: number | null;
   storeUrl: string;
 }
 
 export interface GroupRecommendationResponse {
-  topGroupTags: string[];
-  groupRecommendations: GameRecommendation[];
+  paidRecommendations: GameRecommendation[];
+  freeRecommendations: GameRecommendation[];
+}
+
+export interface GameCandidate {
+  appId: number;
+  steamAppId: number | null;
+  name: string | null;
+  tags: Record<string, number> | null;
+
+  tagScore: number;
+  matchScore?: number;
+  finalScore?: number;
 }
