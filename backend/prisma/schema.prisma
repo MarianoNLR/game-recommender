@@ -28,14 +28,40 @@ model Group {
 }
 
 model Game {
-  appId Int @id
-  steamAppId Int?
-  name String?
-  tags Json?
-  price Int?
-  details Json?
+  steamAppId    Int      @id
+  name          String
+  description   String?
+  releaseDate   DateTime?
 
-  tagsFetched Boolean @default(false)
-  detailsFetched Boolean @default(false)
-  fetchedAt DateTime @default(now())
+  reviewPercentage Int?
+
+  isFree        Boolean?
+  price         Int?
+  initialPrice  Int?
+  discount      Int?
+
+  lastPriceUpdate DateTime?
+  lastInfoUpdate  DateTime?
+  lastTagsUpdate DateTime?
+  lastPicsUpdate   DateTime?
+
+  tags          GameTag[]
+}
+
+model Tag {
+  id       Int      @id @default(autoincrement())
+  steamTagId Int?   @unique
+  name     String   @unique
+
+  games    GameTag[]
+}
+
+model GameTag {
+  gameId Int
+  tagId  Int
+
+  game Game @relation(fields: [gameId], references: [steamAppId])
+  tag  Tag  @relation(fields: [tagId], references: [steamTagId])
+
+  @@id([gameId, tagId])
 }
