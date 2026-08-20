@@ -7,6 +7,34 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { SteamUserClient } from 'src/modules/steam/steam-user.client';
 
+const MULTIPLAYER_CATEGORY_IDS = new Set<number>([
+  // IDs correspondientes a:
+  // Multi-player
+  1,
+  // MMO
+  20,
+  // PvP
+  49,
+  // Online PvP
+  36,
+  // LAN PvPF
+  47,
+  // Shared/Split Screen PvP
+  37,
+  // Co-op
+  9,
+  // Online Co-op
+  38,
+  // LAN Co-op
+  48,
+  // Shared/Split Screen Co-op
+  39,
+  // Shared/Split Screen
+  24,
+  // Cross-Platform Multiplayer
+  27,
+]);
+
 const STEAM_URL = 'https://store.steampowered.com/search/results/';
 
 const COUNTRY = 'US';
@@ -282,6 +310,9 @@ async function loadAllTags(prisma: PrismaService, steamUser: SteamUserClient) {
         }
 
         const tags = common.store_tags;
+        const categories: Record<string, string> = common.category ?? {};
+
+        const isMultiplayer = isMultiplayerGame(categories);
 
         /*
          * Tags
@@ -342,7 +373,7 @@ async function loadAllTags(prisma: PrismaService, steamUser: SteamUserClient) {
               !Number.isNaN(reviewPercentage) && {
                 reviewPercentage,
               }),
-
+            isMultiplayer,
             lastPicsUpdate: new Date(),
           },
         });
@@ -360,6 +391,18 @@ async function loadAllTags(prisma: PrismaService, steamUser: SteamUserClient) {
   }
 
   console.log(`\nCarga de tags terminada. Total procesado: ${totalProcessed}`);
+}
+
+function isMultiplayerGame(categories: Record<string, string>): boolean {
+  return Object.entries(categories).some(([key, value]) => {
+    if (value !== '1') return false;
+
+    const categoryId = Number(key.replace('category_', ''));
+
+    return (
+      Number.isInteger(categoryId) && MULTIPLAYER_CATEGORY_IDS.has(categoryId)
+    );
+  });
 }
 
 /**
@@ -435,7 +478,10 @@ async function main() {
   const steamUser = new SteamUserClient();
   try {
     await steamUser.login();
-    await Promise.all([loadAllGames(prisma), loadAllTags(prisma, steamUser)]);
+    await Promise.all([
+      // loadAllGames(prisma),
+      loadAllTags(prisma, steamUser),
+    ]);
   } finally {
     /**
      * Close App
