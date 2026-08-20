@@ -47,6 +47,10 @@ export interface SteamAppDetails {
     discount_percent: number;
     final_formatted: string;
   };
+  release_date?: {
+    coming_soon: boolean;
+    date: string;
+  };
   recommendations?: {
     total: number;
   };
@@ -63,4 +67,25 @@ export interface SteamSpyGameTagsResponse {
 export interface SteamSpyGame {
   appid: number;
   name: string;
+}
+
+export interface SteamStoreTag {
+  tagid: number;
+  name: string;
+  count: number;
+}
+
+export interface SteamAppListItem {
+  appid: number;
+  name: string;
+  last_modified: number;
+  price_change_number: number;
+}
+
+export interface SteamAppListResponse {
+  response: {
+    apps: SteamAppListItem[];
+    have_more_results?: boolean;
+    last_appid?: number;
+  };
 }

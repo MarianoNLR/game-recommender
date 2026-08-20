@@ -1,22 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { SteamApiClient } from './steam-api.client';
-import { PlayerSummary, SteamAppDetailsMap, SteamGame, SteamSpyGame } from './steam.types';
-import { GameService } from '../game/game.service';
+import { SteamStoreClient } from './steam-store.client';
+import { PlayerSummary, SteamGame } from './steam.types';
 import { GameDetailsResponseMap } from '../game/game.types';
+import { GameService } from '../game/game.service';
 
 @Injectable()
 export class SteamService {
-  // This class will handle interactions with the Steam API, such as fetching user data, owned games, etc.
   constructor(
     private readonly steamApiClient: SteamApiClient,
+    private readonly steamStoreClient: SteamStoreClient,
     private readonly gameService: GameService,
   ) {}
 
   async getOwnedGames(steamId: string): Promise<SteamGame[]> {
-    // For a given Steam ID, this method would call the Steam API to retrieve the list of owned games.
     const response = await this.steamApiClient.getOwnedGames(steamId);
-    console.log('Owned Games Response:', response);
-    // Filter games that have been played for more than 5 hours (300 minutes) to focus on games the user has engaged with.
+
     const gamesFiltered = response.response.games.filter(
       (game) => game.playtime_forever >= 300,
     );
@@ -31,53 +30,56 @@ export class SteamService {
   }
 
   async getPlayerSummaries(steamIds: string[]): Promise<PlayerSummary[]> {
-    // This method would call the Steam API to retrieve player summaries for a list of Steam IDs.
     const response = await this.steamApiClient.getPlayerSummaries(steamIds);
+
     return response.response.players;
   }
 
-  async getAppsDetails(appIds: number[]): Promise<GameDetailsResponseMap> {
-    // This method would call the Steam API to retrieve details for a list of app IDs.
-    const response: GameDetailsResponseMap =
-      await this.steamApiClient.getAppsDetails(appIds);
-    return response;
+  // async getGameInfo(appIds: number[]): Promise<GameDetailsResponseMap> {
+  //   return this.steamApiClient.getAppsDetails(appIds);
+  // }
+
+  async getGameTags(appId: number) {
+    return this.steamStoreClient.getGameTags(appId);
   }
 
-  async getAppTags(
-    appIds: number[],
-  ): Promise<Record<string, Record<string, number>>> {
-    const data: Record<string, Record<string, number>> = {};
+  async syncGame(appId: number) {
+    const game = await this.gameService.findByAppId(appId);
 
-    for (const id of appIds) {
-      const cached = await this.gameService.findByAppId(id);
+    // New game
+    if (!game) {
+      const details = await this.steamStoreClient.getGameDetails(appId);
+      const tags = await this.steamStoreClient.getGameTags(appId);
 
-      if (cached && this.gameService.isCacheValid(cached)) {
-        data[id] = cached.tags as Record<string, number>;
-        continue;
-      }
+      await this.gameService.upsertGame(details);
+      await this.gameService.updateGameTags(appId, tags);
 
-      const [tags, details] = await Promise.all([
-        this.steamApiClient.getAppTags(id),
-        this.steamApiClient.getAppsDetails([id]),
-      ]);
-
-      await this.gameService.upsert(id, {
-        name: details[id]?.name ?? null,
-        tags,
-        price: details[id]?.price,
-        fetchedAt: new Date(),
-      });
-
-      data[id] = tags;
-
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return this.gameService.findByAppId(appId);
     }
 
-    return data;
-  }
+    const priceValid = this.gameService.isPriceCacheValid(game);
+    const infoValid = this.gameService.isInfoCacheValid(game);
+    const tagsValid = this.gameService.isTagsCacheValid(game);
 
-  async getAppsByTag(tag: string): Promise<Record<string, SteamSpyGame>> {
-    const response = await this.steamApiClient.getAppsByTag(tag);
-    return response;
+    // Everthing is up to date
+    if (priceValid && infoValid && tagsValid) {
+      return game;
+    }
+
+    // If price or info are not valid update
+    if (!priceValid || !infoValid) {
+      const details = await this.steamStoreClient.getGameDetails(appId);
+
+      await this.gameService.upsertGame(details, !priceValid, !infoValid);
+    }
+
+    // Control tags cache
+    if (!tagsValid) {
+      const tags = await this.steamStoreClient.getGameTags(appId);
+
+      await this.gameService.updateGameTags(appId, tags);
+    }
+
+    return this.gameService.findByAppId(appId);
   }
 }
