@@ -23,5 +23,12 @@
     "noFallthroughCasesInSwitch": false,
     "strictPropertyInitialization": false,
     "rewriteRelativeImportExtensions": true
+  },
+    "ts-node": {
+    "require": ["tsconfig-paths/register"],
+    "compilerOptions": {
+      "module": "CommonJS",
+      "moduleResolution": "node"
+    }
   }
 }
