@@ -45,7 +45,10 @@ model Game {
   lastTagsUpdate DateTime?
   lastPicsUpdate   DateTime?
 
+  isMultiplayer Boolean @default(false)
+
   tags          GameTag[]
+  categories  GameCategory[]
 }
 
 model Tag {
@@ -64,4 +67,22 @@ model GameTag {
   tag  Tag  @relation(fields: [tagId], references: [steamTagId])
 
   @@id([gameId, tagId])
+}
+
+model Category {
+  steamCategoryId Int            @id
+  internalName    String
+  displayName     String
+
+  games           GameCategory[]
+}
+
+model GameCategory {
+  steamAppId Int
+  categoryId Int
+
+  game       Game     @relation(fields: [steamAppId], references: [steamAppId])
+  category   Category @relation(fields: [categoryId], references: [steamCategoryId])
+
+  @@id([steamAppId, categoryId])
 }
