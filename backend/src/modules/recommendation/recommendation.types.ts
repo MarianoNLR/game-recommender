@@ -19,14 +19,26 @@ export interface GameRecommendation {
   appId: number;
   steamAppId: number;
   score: number;
+
   name: string;
   headerImage: string;
   shortDescription: string;
+
   price: number | null;
   formattedPrice: string | null;
   isFree: boolean;
+
   metacritic: number | null;
   storeUrl: string;
+
+  matchedTags: MatchedTag[];
+  matchedTagCount: number;
+}
+
+export interface MatchedTag {
+  tag: string;
+  groupScore: number;
+  memberCount: number;
 }
 
 export interface GroupRecommendationResponse {
