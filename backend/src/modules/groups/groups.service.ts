@@ -22,7 +22,10 @@ export class GroupsService {
     const group = await this.prisma.group.create({
       data: {
         name: createGroupDto.name,
-        budget: createGroupDto.budget,
+        budget:
+          createGroupDto.budget != null
+            ? Math.round(createGroupDto.budget * 100)
+            : null,
         accessCode: randomUUID(),
         createdFromIp: ip,
         expiresAt,
