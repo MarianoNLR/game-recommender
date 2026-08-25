@@ -261,9 +261,11 @@ export class RecommendationService {
       .sort((a, b) => b.score - a.score);
 
     for (const candidate of candidates) {
-      const paidFull = recommendationsResponse.paidRecommendations.length >= 20;
+      const paidFull =
+        recommendationsResponse.paidRecommendations.length >= 100;
 
-      const freeFull = recommendationsResponse.freeRecommendations.length >= 20;
+      const freeFull =
+        recommendationsResponse.freeRecommendations.length >= 100;
 
       if (paidFull && freeFull) {
         break;
