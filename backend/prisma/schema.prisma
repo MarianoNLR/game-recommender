@@ -34,18 +34,18 @@ model Game {
   releaseDate   DateTime?
 
   reviewPercentage Int?
+  reviewCount      Int?
 
   isFree        Boolean?
   price         Int?
   initialPrice  Int?
   discount      Int?
 
-  lastPriceUpdate DateTime?
   lastInfoUpdate  DateTime?
-  lastTagsUpdate DateTime?
-  lastPicsUpdate   DateTime?
 
   isMultiplayer Boolean @default(false)
+
+  imageUrl String?
 
   tags          GameTag[]
   categories  GameCategory[]
@@ -62,6 +62,7 @@ model Tag {
 model GameTag {
   gameId Int
   tagId  Int
+  weight Int
 
   game Game @relation(fields: [gameId], references: [steamAppId])
   tag  Tag  @relation(fields: [tagId], references: [steamTagId])
