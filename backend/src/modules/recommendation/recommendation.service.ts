@@ -19,6 +19,8 @@ import {
 } from './recommendation.constants';
 import { GameService } from '../game/game.service';
 
+const REVIEW_WEIGHT = 0.15;
+
 @Injectable()
 export class RecommendationService {
   constructor(
@@ -193,9 +195,9 @@ export class RecommendationService {
 
     console.log('Tags to search:', tagsToSearch);
 
-    const recommendationsResponse: GroupRecommendationResponse = {
-      paidRecommendations: [],
-      freeRecommendations: [],
+    const recommendationsResponse = {
+      paidRecommendations: [] as any[],
+      freeRecommendations: [] as any[],
     };
 
     const ownedAppIds = new Set<number>();
@@ -215,31 +217,53 @@ export class RecommendationService {
     const candidates = games
       .filter((game) => !ownedAppIds.has(game.steamAppId))
       .map((game) => {
-        const relevantTags = new Set(
+        const relevantTags = new Map(
           game.tags
-            .map(({ tag }) => tag.name)
-            .filter((tag) => !EXCLUDED_PROFILE_TAGS.has(tag)),
+            .filter(({ tag }) => !EXCLUDED_PROFILE_TAGS.has(tag.name))
+            .map(({ tag, weight }) => [tag.name, weight]),
         );
 
-        const { finalScore, matchedTags, matchedTagCount } =
-          this.calculateMatchScore(groupTagScores, relevantTags, tagIdf);
+        const match = this.calculateMatchScore(
+          groupTagScores,
+          relevantTags,
+          tagIdf,
+        );
+
+        const reviewScore = this.calculateReviewScore(
+          game.reviewPercentage,
+          game.reviewCount,
+        );
+
+        const reviewBonus = reviewScore * REVIEW_WEIGHT;
+
+        const finalScore = match.finalScore + reviewBonus;
 
         return {
-          ...game,
-          relevantTags,
-          finalScore,
-          matchedTags,
-          matchedTagCount,
+          appId: game.steamAppId,
+          steamAppId: game.steamAppId,
+
+          score: finalScore,
+          tagScore: match.finalScore,
+
+          reviewPercentage: game.reviewPercentage,
+          reviewCount: game.reviewCount,
+          reviewScore,
+          reviewBonus,
+
+          name: game.name,
+          price: game.price,
+          isFree: game.isFree,
+
+          matchedTags: match.matchedTags,
+          matchedTagCount: match.matchedTagCount,
         };
       })
-      .sort((a, b) => b.finalScore - a.finalScore);
+      .sort((a, b) => b.score - a.score);
 
     for (const candidate of candidates) {
-      const paidFull =
-        recommendationsResponse.paidRecommendations.length >= 100;
+      const paidFull = recommendationsResponse.paidRecommendations.length >= 20;
 
-      const freeFull =
-        recommendationsResponse.freeRecommendations.length >= 100;
+      const freeFull = recommendationsResponse.freeRecommendations.length >= 20;
 
       if (paidFull && freeFull) {
         break;
@@ -248,11 +272,7 @@ export class RecommendationService {
       if (candidate.isFree) {
         if (!freeFull) {
           recommendationsResponse.freeRecommendations.push(
-            this.buildRecommendation(
-              candidate.steamAppId,
-              candidate.finalScore,
-              candidate,
-            ),
+            this.buildRecommendation(candidate),
           );
         }
 
@@ -263,7 +283,7 @@ export class RecommendationService {
 
       if (paidRejection) {
         console.log(
-          `Rejected: ${paidRejection} | AppId: ${candidate.steamAppId} | Score: ${candidate.finalScore}`,
+          `Rejected: ${paidRejection} | AppId: ${candidate.steamAppId} | Score: ${candidate.score}`,
         );
 
         continue;
@@ -274,11 +294,7 @@ export class RecommendationService {
       }
 
       recommendationsResponse.paidRecommendations.push(
-        this.buildRecommendation(
-          candidate.steamAppId,
-          candidate.finalScore,
-          candidate,
-        ),
+        this.buildRecommendation(candidate),
       );
 
       console.count('Recommendation found!');
@@ -326,27 +342,30 @@ export class RecommendationService {
     return null;
   }
 
-  private buildRecommendation(
-    appId: number,
-    score: number,
-    details: any,
-  ): GameRecommendation {
+  private buildRecommendation(candidate: any): GameRecommendation {
     return {
-      appId,
-      steamAppId: details.steamAppId,
-      score,
-      name: details.name,
-      headerImage: details.headerImage,
-      shortDescription: details.shortDescription,
-      price: details.price,
-      formattedPrice:
-        details.price != null ? `$${(details.price / 100).toFixed(2)}` : null,
-      isFree: details.isFree,
-      metacritic: details.recommendations?.total ?? null,
-      storeUrl: `https://store.steampowered.com/app/${appId}`,
+      appId: candidate.steamAppId,
+      steamAppId: candidate.steamAppId,
 
-      matchedTags: details.matchedTags ?? [],
-      matchedTagCount: details.matchedTagCount ?? 0,
+      score: candidate.score,
+      tagScore: candidate.tagScore,
+
+      reviewPercentage: candidate.reviewPercentage,
+      reviewCount: candidate.reviewCount,
+      reviewScore: candidate.reviewScore,
+      reviewBonus: candidate.reviewBonus,
+
+      name: candidate.name,
+      price: candidate.price,
+      formattedPrice:
+        candidate.price != null
+          ? `$${(candidate.price / 100).toFixed(2)}`
+          : null,
+      isFree: candidate.isFree,
+      storeUrl: `https://store.steampowered.com/app/${candidate.appId}`,
+
+      matchedTags: candidate.matchedTags,
+      matchedTagCount: candidate.matchedTagCount,
     };
   }
 
@@ -377,7 +396,7 @@ export class RecommendationService {
         score: number;
       }
     >,
-    gameTags: Set<string>,
+    gameTags: Map<string, number>,
     tagIdf: Record<string, number>,
   ) {
     const matchedTags: {
@@ -385,19 +404,29 @@ export class RecommendationService {
       groupScore: number;
       memberCount: number;
       idf: number;
+      gameWeight: number;
+      normalizedGameWeight: number;
       weightedScore: number;
     }[] = [];
 
     let finalScore = 0;
 
+    const weights = [...gameTags.values()];
+
+    const maxWeight = weights.length > 0 ? Math.max(...weights) : 0;
+
     for (const [tag, groupTag] of Object.entries(groupTagScores)) {
-      if (!gameTags.has(tag)) {
+      const gameWeight = gameTags.get(tag);
+
+      if (gameWeight === undefined) {
         continue;
       }
 
       const idf = tagIdf[tag] ?? 0;
 
-      const weightedScore = groupTag.score * idf;
+      const normalizedGameWeight = maxWeight > 0 ? gameWeight / maxWeight : 0;
+
+      const weightedScore = groupTag.score * idf * normalizedGameWeight;
 
       finalScore += weightedScore;
 
@@ -406,6 +435,8 @@ export class RecommendationService {
         groupScore: groupTag.score,
         memberCount: groupTag.memberCount,
         idf,
+        gameWeight,
+        normalizedGameWeight,
         weightedScore,
       });
     }
@@ -417,6 +448,21 @@ export class RecommendationService {
       matchedTags,
       matchedTagCount: matchedTags.length,
     };
+  }
+
+  private calculateReviewScore(
+    reviewPercentage: number | null,
+    reviewCount: number | null,
+  ) {
+    if (reviewPercentage == null || reviewCount == null || reviewCount <= 0) {
+      return 0;
+    }
+
+    const quality = reviewPercentage / 100;
+
+    const confidence = Math.min(Math.log10(reviewCount + 1) / 5, 1);
+
+    return quality * confidence;
   }
 
   // private getRelevantTags(

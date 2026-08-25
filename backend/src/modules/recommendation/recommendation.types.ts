@@ -19,16 +19,19 @@ export interface GameRecommendation {
   appId: number;
   steamAppId: number;
   score: number;
+  tagScore: number;
+
+  reviewPercentage: number;
+  reviewCount: number;
+  reviewScore: number;
+  reviewBonus: number;
 
   name: string;
-  headerImage: string;
-  shortDescription: string;
 
   price: number | null;
   formattedPrice: string | null;
   isFree: boolean;
 
-  metacritic: number | null;
   storeUrl: string;
 
   matchedTags: MatchedTag[];

@@ -38,7 +38,6 @@ export class GameService {
 
         releaseDate,
 
-        lastPriceUpdate: now,
         lastInfoUpdate: now,
       },
 
@@ -90,6 +89,7 @@ export class GameService {
           create: {
             gameId: steamAppId,
             tagId: dbTag.id,
+            weight: tag.count,
           },
           update: {
             //count: tag.count,
@@ -102,7 +102,7 @@ export class GameService {
           steamAppId,
         },
         data: {
-          lastTagsUpdate: new Date(),
+          lastInfoUpdate: new Date(),
         },
       });
     });
@@ -122,8 +122,8 @@ export class GameService {
 
   isPriceCacheValid(game: Game): boolean {
     return (
-      game.lastPriceUpdate !== null &&
-      Date.now() - game.lastPriceUpdate.getTime() < this.PRICE_CACHE_MS
+      game.lastInfoUpdate !== null &&
+      Date.now() - game.lastInfoUpdate.getTime() < this.PRICE_CACHE_MS
     );
   }
 
@@ -136,8 +136,8 @@ export class GameService {
 
   isTagsCacheValid(game: Game): boolean {
     return (
-      game.lastTagsUpdate !== null &&
-      Date.now() - game.lastTagsUpdate.getTime() < this.TAGS_CACHE_MS
+      game.lastInfoUpdate !== null &&
+      Date.now() - game.lastInfoUpdate.getTime() < this.TAGS_CACHE_MS
     );
   }
 
@@ -165,9 +165,11 @@ export class GameService {
         steamAppId: true,
         tags: {
           select: {
+            weight: true,
             tag: {
               select: {
                 name: true,
+                steamTagId: true,
               },
             },
           },
@@ -230,6 +232,7 @@ export class GameService {
         name: true,
         releaseDate: true,
         reviewPercentage: true,
+        reviewCount: true,
 
         isFree: true,
         price: true,
@@ -238,6 +241,7 @@ export class GameService {
 
         tags: {
           select: {
+            weight: true,
             tag: {
               select: {
                 steamTagId: true,
