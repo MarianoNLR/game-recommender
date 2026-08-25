@@ -19,12 +19,12 @@ export interface GameRecommendation {
   appId: number;
   steamAppId: number;
   score: number;
-  tagScore: number;
+  // tagScore: number;
 
   reviewPercentage: number;
   reviewCount: number;
-  reviewScore: number;
-  reviewBonus: number;
+  // reviewScore: number;
+  // reviewBonus: number;
 
   name: string;
 

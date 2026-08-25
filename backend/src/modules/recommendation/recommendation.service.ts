@@ -247,8 +247,8 @@ export class RecommendationService {
 
           reviewPercentage: game.reviewPercentage,
           reviewCount: game.reviewCount,
-          reviewScore,
-          reviewBonus,
+          // reviewScore,
+          // reviewBonus,
 
           name: game.name,
           price: game.price,
@@ -279,15 +279,15 @@ export class RecommendationService {
         continue;
       }
 
-      const paidRejection = this.validatePaidGame(candidate, group.budget);
+      // const paidRejection = this.validatePaidGame(candidate, group.budget);
 
-      if (paidRejection) {
-        console.log(
-          `Rejected: ${paidRejection} | AppId: ${candidate.steamAppId} | Score: ${candidate.score}`,
-        );
+      // if (paidRejection) {
+      //   console.log(
+      //     `Rejected: ${paidRejection} | AppId: ${candidate.steamAppId} | Score: ${candidate.score}`,
+      //   );
 
-        continue;
-      }
+      //   continue;
+      // }
 
       if (paidFull) {
         continue;
@@ -319,28 +319,28 @@ export class RecommendationService {
     };
   }
 
-  private validatePaidGame(
-    details: any,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    budget: number | null,
-  ): string | null {
-    if (details.price == null) {
-      return 'No price';
-    }
-    // if (budget != null && details.price / 100 > budget) {
-    //   return 'Price greater than budget';
-    // }
+  // private validatePaidGame(
+  //   details: any,
+  //   // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  //   budget: number | null,
+  // ): string | null {
+  //   if (details.price == null) {
+  //     return 'No price';
+  //   }
+  //   // if (budget != null && details.price / 100 > budget) {
+  //   //   return 'Price greater than budget';
+  //   // }
 
-    // if (details.recommendations?.total == null) {
-    //   return 'No recommendation data';
-    // }
+  //   // if (details.recommendations?.total == null) {
+  //   //   return 'No recommendation data';
+  //   // }
 
-    // if (details.recommendations.total < 5000) {
-    //   return 'Not enough Steam recommendations';
-    // }
+  //   // if (details.recommendations.total < 5000) {
+  //   //   return 'Not enough Steam recommendations';
+  //   // }
 
-    return null;
-  }
+  //   return null;
+  // }
 
   private buildRecommendation(candidate: any): GameRecommendation {
     return {
@@ -348,12 +348,12 @@ export class RecommendationService {
       steamAppId: candidate.steamAppId,
 
       score: candidate.score,
-      tagScore: candidate.tagScore,
+      // tagScore: candidate.tagScore,
 
       reviewPercentage: candidate.reviewPercentage,
       reviewCount: candidate.reviewCount,
-      reviewScore: candidate.reviewScore,
-      reviewBonus: candidate.reviewBonus,
+      // reviewScore: candidate.reviewScore,
+      // reviewBonus: candidate.reviewBonus,
 
       name: candidate.name,
       price: candidate.price,
@@ -368,25 +368,6 @@ export class RecommendationService {
       matchedTagCount: candidate.matchedTagCount,
     };
   }
-
-  // private calculateMatchScore(
-  //   groupTagScores: Record<
-  //     string,
-  //     {
-  //       memberCount: number;
-  //       score: number;
-  //     }
-  //   >,
-  //   gameTags: Set<string>,
-  // ): number {
-  //   return Object.entries(groupTagScores).reduce((total, [tag, groupTag]) => {
-  //     if (!gameTags.has(tag)) {
-  //       return total;
-  //     }
-
-  //     return total + groupTag.score;
-  //   }, 0);
-  // }
 
   private calculateMatchScore(
     groupTagScores: Record<
