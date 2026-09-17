@@ -1,7 +1,7 @@
 export interface GetOwnedGamesResponse {
   response: {
-    game_count: number;
-    games: SteamGame[];
+    game_count?: number;
+    games?: SteamGame[];
   };
 }
 

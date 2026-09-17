@@ -28,29 +28,7 @@ export class SteamController {
   ) {}
   @Get('validate-member/:steamId')
   async validateMember(@Param('steamId') steamId: string) {
-    const playerSummaries = await this.steamService.getPlayerSummaries([
-      steamId,
-    ]);
-    const player = playerSummaries[0];
-    if (!player) {
-      return { isValid: false, reason: 'SteamID not found' };
-    }
-    if (player.communityvisibilitystate !== 3) {
-      return {
-        isValid: false,
-        isPrivate: true,
-        reason: 'El perfil es privado',
-        name: player.personaname,
-        avatarUrl: player.avatarmedium,
-      };
-    }
-    return {
-      isValid: true,
-      isPrivate: false,
-      name: player.personaname,
-      avatarUrl: player.avatarmedium,
-      steamId,
-    };
+    return this.steamService.validateMember(steamId);
   }
 
   @Get('owned-games/:steamId')

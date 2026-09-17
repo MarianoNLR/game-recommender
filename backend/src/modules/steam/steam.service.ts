@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { SteamApiClient } from './steam-api.client';
 import { SteamStoreClient } from './steam-store.client';
 import { PlayerSummary, SteamGame } from './steam.types';
@@ -16,7 +16,14 @@ export class SteamService {
   async getOwnedGames(steamId: string): Promise<SteamGame[]> {
     const response = await this.steamApiClient.getOwnedGames(steamId);
 
-    const gamesFiltered = response.response.games.filter(
+    const library = response.response;
+    if (!Array.isArray(library?.games) && library?.game_count !== 0) {
+      throw new BadRequestException(
+        `No se pudo acceder a la biblioteca del SteamID ${steamId}. Revisá que el perfil y los detalles de juegos estén públicos en la privacidad de Steam y volvé a intentar.`,
+      );
+    }
+
+    const gamesFiltered = (library.games ?? []).filter(
       (game) => game.playtime_forever >= 300,
     );
 
@@ -27,6 +34,40 @@ export class SteamService {
       img_icon_url: game.img_icon_url,
       content_descriptorids: game.content_descriptorids,
     }));
+  }
+
+  async validateMember(steamId: string) {
+    const [player] = await this.getPlayerSummaries([steamId]);
+    if (!player) {
+      return { isValid: false as const, reason: `SteamID ${steamId} no encontrado` };
+    }
+    if (player.communityvisibilitystate !== 3) {
+      return {
+        isValid: false as const,
+        isPrivate: true,
+        reason: `El perfil del SteamID ${steamId} es privado. Configuralo como público en Steam.`,
+        name: player.personaname,
+        avatarUrl: player.avatarmedium,
+      };
+    }
+    try {
+      await this.getOwnedGames(steamId);
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) throw error;
+      return {
+        isValid: false as const,
+        reason: error.message,
+        name: player.personaname,
+        avatarUrl: player.avatarmedium,
+      };
+    }
+    return {
+      isValid: true as const,
+      isPrivate: false,
+      name: player.personaname,
+      avatarUrl: player.avatarmedium,
+      steamId,
+    };
   }
 
   async getPlayerSummaries(steamIds: string[]): Promise<PlayerSummary[]> {
