@@ -5,7 +5,7 @@ import RecommendationGrid from "./RecommendationGrid";
 
 export default function RecommendationsPage() {
   const { accessCode } = useParams<{ accessCode: string }>();
-  const { data, isLoading, isError } = useRecommendations(accessCode!);
+  const { data, isLoading, isError, error, refetch } = useRecommendations(accessCode!);
 
   const formatUsd = (cents: number) =>
     new Intl.NumberFormat("en-US", {
@@ -18,8 +18,11 @@ export default function RecommendationsPage() {
       <main className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-2">
           <p className="text-destructive text-lg font-medium">
-            Código inválido o grupo expirado
+            {error?.message ?? 'Error al obtener recomendaciones'}
           </p>
+          <button type="button" onClick={() => void refetch()} className="block mx-auto text-sm underline">
+            Reintentar
+          </button>
           <a href="/" className="text-muted-foreground text-sm underline">
             Volver al inicio
           </a>
