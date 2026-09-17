@@ -1,4 +1,5 @@
 import { BASE_URL } from '@/lib/config'
+import { responseError } from './response-error'
 
 export async function createGroup(data: {
   name: string
@@ -11,7 +12,7 @@ export async function createGroup(data: {
     body: JSON.stringify(data),
   })
 
-  if (!response.ok) throw new Error('Error al crear el grupo')
+  if (!response.ok) throw await responseError(response, 'Error al crear el grupo. Volvé a intentar.')
 
   return response.json()
 }
