@@ -3,19 +3,33 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateGroupDto } from './dto/create-group.dto.js';
+import type { CreateGroupDto } from './dto/create-group.dto.js';
 import { PrismaService } from '../../prisma.service';
 import { randomUUID } from 'crypto';
 import { plainToInstance } from 'class-transformer';
 import { GroupResponseDto } from './dto/group-response.dto';
+import { SteamService } from '../steam/steam.service';
 
 @Injectable()
 export class GroupsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly steamService: SteamService,
+  ) {}
   async create(
     createGroupDto: CreateGroupDto,
     ip: string,
   ): Promise<GroupResponseDto> {
+    const members = await Promise.all(
+      createGroupDto.memberSteamIds.map((steamId) =>
+        this.steamService.validateMember(steamId),
+      ),
+    );
+    const invalidMember = members.find((member) => !member.isValid);
+    if (invalidMember) {
+      throw new BadRequestException(invalidMember.reason);
+    }
+
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24);
 
