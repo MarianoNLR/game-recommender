@@ -12,7 +12,7 @@ import { useValidateMember } from '../hooks/useValidatemember'
 export default function CreateGroupForm() {
   const [steamIdInput, setSteamIdInput] = useState('')
   const { mutate: validate, isPending: isValidating } = useValidateMember()
-  const { mutate: createGroup, isPending } = useCreateGroup()
+  const { mutate: createGroup, isPending, error: createError } = useCreateGroup()
   const [members, setMembers] = useState<GroupMember[]>([])
   const [steamIdError, setSteamIdError] = useState('')
 
@@ -132,7 +132,8 @@ export default function CreateGroupForm() {
         )}
       </div>
 
-      <Button type="submit" className="w-full cursor-pointer" disabled={isPending}>
+      {createError && <p role="alert" className="text-destructive text-sm">{createError.message}</p>}
+      <Button type="submit" className="w-full cursor-pointer" disabled={isPending || isValidating}>
         {isPending ? 'Creando...' : 'Crear grupo'}
       </Button>
     </form>
