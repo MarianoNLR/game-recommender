@@ -3,7 +3,7 @@ import { z } from 'zod'
 export interface GroupMember {
   steamId: string
   name: string
-  avatarUrl: string
+  avatarUrl: string | null
 }
 
 export const createGroupSchema = z.object({

@@ -1,13 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { SteamService } from '../steam/steam.service';
+import { SteamProfileService } from '../steam/steam-profile.service';
 import { GroupsService } from '../groups/groups.service';
-import { SteamGame } from '../steam/steam.types';
+import { OwnedGame } from '../steam/steam.types';
+import { MIN_PLAYTIME_MINUTES } from '../steam/steam.constants';
 import {
   GameRecommendation,
   GroupRecommendationResponse,
   MemberProfile,
   MemberProfileWithTags,
   MemberTagProfile,
+  CountedGame,
+  GroupProfileSummary,
 } from './recommendation.types';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { GameDetailsResponse } from '../game/game.types';
@@ -24,7 +27,7 @@ const REVIEW_WEIGHT = 0.15;
 @Injectable()
 export class RecommendationService {
   constructor(
-    private steamService: SteamService,
+    private steamProfileService: SteamProfileService,
     private groupsService: GroupsService,
     private gameService: GameService,
   ) {}
@@ -58,26 +61,64 @@ export class RecommendationService {
     };
   }
 
-  // 1. Individual member profile with games and member info.
-  async getMemberProfile(steamId: string): Promise<MemberProfile> {
-    const games: SteamGame[] = await this.steamService.getOwnedGames(steamId);
-    const playerSummaries = await this.steamService.getPlayerSummaries([
-      steamId,
-    ]);
-    const player = playerSummaries[0];
+  // Perfil del grupo para mostrar en pantalla: qué juegos de cada miembro se
+  // tuvieron en cuenta y qué aportó cada uno a los tags del grupo. No incluye
+  // la biblioteca completa ni los minutos jugados.
+  async getGroupProfileSummary(
+    accessCode: string,
+  ): Promise<GroupProfileSummary> {
+    const { group, memberProfiles, topGroupTags } =
+      await this.getGroupProfile(accessCode);
 
-    if (!games || games.length === 0) {
+    return {
+      group: {
+        name: group.name,
+        accessCode: group.accessCode,
+        budget: group.budget,
+      },
+      members: memberProfiles.map(
+        ({ steamId, name, avatarUrl, topTags, countedGames }) => ({
+          steamId,
+          name,
+          avatarUrl,
+          topTags,
+          countedGames,
+        }),
+      ),
+      topGroupTags,
+      groupTagBreakdown: topGroupTags.map((tag) => ({
+        tag,
+        members: memberProfiles
+          .map(({ steamId, countedGames }) => ({
+            steamId,
+            games: countedGames.filter((game) => game.tags.includes(tag)),
+          }))
+          .filter(({ games }) => games.length > 0),
+      })),
+    };
+  }
+
+  // 1. Individual member profile with games and member info.
+  // Viene del perfil cacheado (ver SteamProfileService), no siempre de Steam.
+  async getMemberProfile(steamId: string): Promise<MemberProfile> {
+    const profile = await this.steamProfileService.getProfile(steamId);
+
+    const games = profile.games.filter(
+      (game) => (game.playtime_forever || 0) >= MIN_PLAYTIME_MINUTES,
+    );
+
+    if (games.length === 0) {
       throw new BadRequestException(`No games found for Steam ID: ${steamId}`);
     }
 
-    const topGames = games
+    const topGames = [...games]
       .sort((a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0))
       .slice(0, 20);
 
     return {
       steamId,
-      name: player.personaname,
-      avatarUrl: player.avatarmedium,
+      name: profile.name,
+      avatarUrl: profile.avatarUrl,
       games,
       topGames,
     };
@@ -86,7 +127,7 @@ export class RecommendationService {
   // 2. Get most played tags from a member.
   async getMemberTagProfile(
     steamId: string,
-    topGames: SteamGame[],
+    topGames: OwnedGame[],
   ): Promise<MemberTagProfile> {
     const appIds = topGames.map((game) => game.appid);
 
@@ -98,6 +139,13 @@ export class RecommendationService {
         game.tags.map(({ tag }) => tag.name),
       ]),
     );
+
+    const gameInfoByAppId = new Map(
+      games.map((game) => [game.steamAppId, game] as const),
+    );
+
+    // Juegos que sí aportaron al perfil (están en la base y tienen tags relevantes).
+    const counted: (Omit<CountedGame, 'share'> & { playtime: number })[] = [];
 
     const tagScores: Record<string, number> = {};
 
@@ -118,6 +166,16 @@ export class RecommendationService {
       relevantTags.forEach((tag) => {
         tagScores[tag] = (tagScores[tag] ?? 0) + playtime * weightPerTag;
       });
+
+      const info = gameInfoByAppId.get(game.appid);
+
+      counted.push({
+        appId: game.appid,
+        name: info?.name ?? `#${game.appid}`,
+        imageUrl: info?.imageUrl ?? null,
+        playtime,
+        tags: relevantTags,
+      });
     });
 
     const totalScore = Object.values(tagScores).reduce(
@@ -137,9 +195,18 @@ export class RecommendationService {
       .map(([tag]) => tag)
       .slice(0, 20);
 
+    // totalScore es la suma de minutos de los juegos que contaron.
+    const countedGames: CountedGame[] = counted
+      .map(({ playtime, ...game }) => ({
+        ...game,
+        share: totalScore > 0 ? playtime / totalScore : 0,
+      }))
+      .sort((a, b) => b.share - a.share);
+
     return {
       tagScores: normalizedTagScores,
       topTags,
+      countedGames,
     };
   }
 

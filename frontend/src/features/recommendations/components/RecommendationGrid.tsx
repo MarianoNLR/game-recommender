@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type RecommendationGame = {
   appId: number;
@@ -11,18 +11,62 @@ type RecommendationGame = {
   isFree?: boolean | null;
   storeUrl?: string;
   imageUrl?: string | null;
+  matchedTags?: { tag: string }[];
 };
 
 type RecommendationGridProps = {
   games: RecommendationGame[];
+  // Tags de "Gustos del grupo", en ese orden. Cada tarjeta muestra los que tiene el juego.
+  groupTags?: string[];
   itemsPerPage?: number;
 };
 
+const MAX_VISIBLE_TAGS = 5;
+
+function GameTags({
+  game,
+  groupTags,
+}: {
+  game: RecommendationGame;
+  groupTags: string[];
+}) {
+  const gameTags = new Set((game.matchedTags ?? []).map((item) => item.tag));
+  const shared = groupTags.filter((tag) => gameTags.has(tag));
+
+  if (shared.length === 0) return null;
+
+  const visible = shared.slice(0, MAX_VISIBLE_TAGS);
+  const hidden = shared.slice(MAX_VISIBLE_TAGS);
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {visible.map((tag) => (
+        <span
+          key={tag}
+          className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs"
+        >
+          {tag}
+        </span>
+      ))}
+      {hidden.length > 0 && (
+        <span
+          title={hidden.join(", ")}
+          className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs"
+        >
+          +{hidden.length}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function RecommendationGrid({
   games,
+  groupTags = [],
   itemsPerPage = 9,
 }: RecommendationGridProps) {
   const [page, setPage] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const totalPages = Math.max(1, Math.ceil(games.length / itemsPerPage));
 
@@ -33,12 +77,19 @@ export default function RecommendationGrid({
     return games.slice(start, end);
   }, [games, page, itemsPerPage]);
 
+  // Al cambiar de página, vuelve al inicio de esta lista (hay más de una en la página).
+  const scrollToTop = () => {
+    containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const goToPreviousPage = () => {
     setPage((currentPage) => Math.max(1, currentPage - 1));
+    scrollToTop();
   };
 
   const goToNextPage = () => {
     setPage((currentPage) => Math.min(totalPages, currentPage + 1));
+    scrollToTop();
   };
 
   if (games.length === 0) {
@@ -50,7 +101,7 @@ export default function RecommendationGrid({
   }
 
   return (
-    <div className="flex flex-col">
+    <div ref={containerRef} className="flex scroll-mt-4 flex-col">
       <div className="min-h-187.5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {paginatedGames.map((game) => (
@@ -77,6 +128,8 @@ export default function RecommendationGrid({
                 <p className="text-muted-foreground line-clamp-2 text-sm">
                   {game.shortDescription}
                 </p>
+
+                <GameTags game={game} groupTags={groupTags} />
 
                 <div className="flex items-center justify-between">
                   <span className="text-primary text-sm font-medium">

@@ -89,3 +89,14 @@ export interface SteamAppListResponse {
     last_appid?: number;
   };
 }
+
+// Lo único que el flujo de recomendación necesita de cada juego de la biblioteca.
+export type OwnedGame = Pick<SteamGame, 'appid' | 'playtime_forever'>;
+
+export interface SteamProfileData {
+  steamId: string;
+  name: string;
+  avatarUrl: string | null;
+  // Biblioteca completa: el filtro de minutos jugados se aplica al leer.
+  games: OwnedGame[];
+}
