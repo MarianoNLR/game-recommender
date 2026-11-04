@@ -2,6 +2,7 @@
 import { useParams } from "react-router-dom";
 import { useRecommendations } from "../hooks/useRecommendations";
 import RecommendationGrid from "./RecommendationGrid";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export default function RecommendationsPage() {
   const { accessCode } = useParams<{ accessCode: string }>();
@@ -138,7 +139,7 @@ export default function RecommendationsPage() {
                         key={member.steamId}
                         className="flex items-center gap-2 bg-muted text-muted-foreground text-sm px-2 py-1 rounded-md"
                       >
-                        <img
+                        <UserAvatar
                           src={member.avatarUrl}
                           alt={member.name}
                           className="w-5 h-5 rounded-full"

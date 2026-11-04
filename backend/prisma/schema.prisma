@@ -87,3 +87,14 @@ model GameCategory {
 
   @@id([steamAppId, categoryId])
 }
+
+model SteamProfile {
+  steamId       String   @id
+  personaName   String
+  avatarUrl     String?
+  // [{ appid, playtime_forever }] con toda la biblioteca; el filtro de juegos se aplica al leer.
+  games         Json
+  lastFetchedAt DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

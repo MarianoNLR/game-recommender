@@ -1,9 +1,12 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { SteamApiClient } from './steam-api.client';
 import { SteamStoreClient } from './steam-store.client';
 import { PlayerSummary, SteamGame } from './steam.types';
 import { GameDetailsResponseMap } from '../game/game.types';
 import { GameService } from '../game/game.service';
+import { SteamProfileError, SteamProfileService } from './steam-profile.service';
+import { extractLibraryGames } from './steam-library.util';
+import { MIN_PLAYTIME_MINUTES } from './steam.constants';
 
 @Injectable()
 export class SteamService {
@@ -11,20 +14,16 @@ export class SteamService {
     private readonly steamApiClient: SteamApiClient,
     private readonly steamStoreClient: SteamStoreClient,
     private readonly gameService: GameService,
+    private readonly steamProfileService: SteamProfileService,
   ) {}
 
   async getOwnedGames(steamId: string): Promise<SteamGame[]> {
     const response = await this.steamApiClient.getOwnedGames(steamId);
 
-    const library = response.response;
-    if (!Array.isArray(library?.games) && library?.game_count !== 0) {
-      throw new BadRequestException(
-        `No se pudo acceder a la biblioteca del SteamID ${steamId}. Revisá que el perfil y los detalles de juegos estén públicos en la privacidad de Steam y volvé a intentar.`,
-      );
-    }
+    const games = extractLibraryGames(response, steamId);
 
-    const gamesFiltered = (library.games ?? []).filter(
-      (game) => game.playtime_forever >= 300,
+    const gamesFiltered = games.filter(
+      (game) => game.playtime_forever >= MIN_PLAYTIME_MINUTES,
     );
 
     return gamesFiltered.map((game: SteamGame) => ({
@@ -36,38 +35,28 @@ export class SteamService {
     }));
   }
 
+  // Valida con el perfil cacheado (o lo consulta a Steam y lo guarda), de modo
+  // que las recomendaciones del grupo no vuelvan a llamar a Steam por este miembro.
   async validateMember(steamId: string) {
-    const [player] = await this.getPlayerSummaries([steamId]);
-    if (!player) {
-      return { isValid: false as const, reason: `SteamID ${steamId} no encontrado` };
-    }
-    if (player.communityvisibilitystate !== 3) {
-      return {
-        isValid: false as const,
-        isPrivate: true,
-        reason: `El perfil del SteamID ${steamId} es privado. Configuralo como público en Steam.`,
-        name: player.personaname,
-        avatarUrl: player.avatarmedium,
-      };
-    }
     try {
-      await this.getOwnedGames(steamId);
+      const profile = await this.steamProfileService.getProfile(steamId);
+
+      return {
+        isValid: true as const,
+        isPrivate: false,
+        name: profile.name,
+        avatarUrl: profile.avatarUrl,
+        steamId,
+      };
     } catch (error) {
-      if (!(error instanceof BadRequestException)) throw error;
+      if (!(error instanceof SteamProfileError)) throw error;
+
       return {
         isValid: false as const,
         reason: error.message,
-        name: player.personaname,
-        avatarUrl: player.avatarmedium,
+        ...error.details,
       };
     }
-    return {
-      isValid: true as const,
-      isPrivate: false,
-      name: player.personaname,
-      avatarUrl: player.avatarmedium,
-      steamId,
-    };
   }
 
   async getPlayerSummaries(steamIds: string[]): Promise<PlayerSummary[]> {

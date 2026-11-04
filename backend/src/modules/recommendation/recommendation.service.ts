@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { SteamService } from '../steam/steam.service';
+import { SteamProfileService } from '../steam/steam-profile.service';
 import { GroupsService } from '../groups/groups.service';
-import { SteamGame } from '../steam/steam.types';
+import { OwnedGame } from '../steam/steam.types';
+import { MIN_PLAYTIME_MINUTES } from '../steam/steam.constants';
 import {
   GameRecommendation,
   GroupRecommendationResponse,
@@ -24,7 +25,7 @@ const REVIEW_WEIGHT = 0.15;
 @Injectable()
 export class RecommendationService {
   constructor(
-    private steamService: SteamService,
+    private steamProfileService: SteamProfileService,
     private groupsService: GroupsService,
     private gameService: GameService,
   ) {}
@@ -59,25 +60,26 @@ export class RecommendationService {
   }
 
   // 1. Individual member profile with games and member info.
+  // Viene del perfil cacheado (ver SteamProfileService), no siempre de Steam.
   async getMemberProfile(steamId: string): Promise<MemberProfile> {
-    const games: SteamGame[] = await this.steamService.getOwnedGames(steamId);
-    const playerSummaries = await this.steamService.getPlayerSummaries([
-      steamId,
-    ]);
-    const player = playerSummaries[0];
+    const profile = await this.steamProfileService.getProfile(steamId);
 
-    if (!games || games.length === 0) {
+    const games = profile.games.filter(
+      (game) => (game.playtime_forever || 0) >= MIN_PLAYTIME_MINUTES,
+    );
+
+    if (games.length === 0) {
       throw new BadRequestException(`No games found for Steam ID: ${steamId}`);
     }
 
-    const topGames = games
+    const topGames = [...games]
       .sort((a, b) => (b.playtime_forever || 0) - (a.playtime_forever || 0))
       .slice(0, 20);
 
     return {
       steamId,
-      name: player.personaname,
-      avatarUrl: player.avatarmedium,
+      name: profile.name,
+      avatarUrl: profile.avatarUrl,
       games,
       topGames,
     };
@@ -86,7 +88,7 @@ export class RecommendationService {
   // 2. Get most played tags from a member.
   async getMemberTagProfile(
     steamId: string,
-    topGames: SteamGame[],
+    topGames: OwnedGame[],
   ): Promise<MemberTagProfile> {
     const appIds = topGames.map((game) => game.appid);
 

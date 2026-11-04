@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { UserAvatar } from '@/components/UserAvatar'
 import { createGroupSchema } from '../types'
 import type { CreateGroupFormValues, GroupMember } from '../types'
 import { useCreateGroup } from '../hooks/useCreateGroup'
@@ -111,7 +112,7 @@ export default function CreateGroupForm() {
               key={member.steamId}
               className="flex items-center gap-2 bg-muted text-muted-foreground text-sm px-2 py-1 rounded-md"
             >
-              <img
+              <UserAvatar
                 src={member.avatarUrl}
                 alt={member.name}
                 className="w-5 h-5 rounded-full"
