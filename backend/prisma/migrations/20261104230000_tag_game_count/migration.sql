@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Tag" ADD COLUMN     "gameCount" INTEGER NOT NULL DEFAULT 0;

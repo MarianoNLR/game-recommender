@@ -35,17 +35,26 @@ export class RecommendationService {
   async getGroupProfile(accessCode: string) {
     // This method will retrieve the group profile,
     // including the list of members and their owned games, based on the provided access code.
+    const groupStart = performance.now();
     const group = await this.groupsService.findOne(accessCode);
+    console.log(
+      `[recs]   grupo (BD): ${(performance.now() - groupStart).toFixed(0)} ms`,
+    );
     console.log('Group:', group);
     //const groupSteamIds = group.memberSteamIds.map((steamId) => steamId);
     //console.log('Group Steam IDs:', groupSteamIds);
 
     const memberProfiles = await Promise.all(
       group.memberSteamIds.map(async (steamId) => {
+        const memberStart = performance.now();
         const profile = await this.getMemberProfile(steamId);
+        const profileMs = performance.now() - memberStart;
         const tagProfile = await this.getMemberTagProfile(
           steamId,
           profile.topGames,
+        );
+        console.log(
+          `[recs]   miembro ${steamId}: perfil Steam/caché ${profileMs.toFixed(0)} ms, tags ${(performance.now() - memberStart - profileMs).toFixed(0)} ms`,
         );
         return { ...profile, ...tagProfile };
       }),
@@ -254,10 +263,31 @@ export class RecommendationService {
 
   async getGroupRecommendations(accessCode: string) {
     console.time('Get Recommendations');
+    let stageStart = performance.now();
+    const logStage = (label: string) => {
+      const now = performance.now();
+      console.log(`[recs] ${label}: ${(now - stageStart).toFixed(0)} ms`);
+      stageStart = now;
+    };
 
-    const { group, memberProfiles, groupTagScores, topGroupTags } =
-      await this.getGroupProfile(accessCode);
-    const tagIdf = await this.gameService.getNormalizedTagIdf();
+    // El IDF no depende del perfil del grupo: se calculan en paralelo.
+    const timed = async <T>(label: string, promise: Promise<T>): Promise<T> => {
+      const start = performance.now();
+      const result = await promise;
+      console.log(
+        `[recs]   ${label}: ${(performance.now() - start).toFixed(0)} ms`,
+      );
+      return result;
+    };
+
+    const [
+      { group, memberProfiles, groupTagScores, topGroupTags },
+      tagIdf,
+    ] = await Promise.all([
+      timed('perfil del grupo', this.getGroupProfile(accessCode)),
+      timed('IDF', this.gameService.getNormalizedTagIdf()),
+    ]);
+    logStage('perfil del grupo + IDF (paralelo)');
     const tagsToSearch = topGroupTags;
 
     console.log('Tags to search:', tagsToSearch);
@@ -280,6 +310,8 @@ export class RecommendationService {
       [...REQUIRED_MULTIPLAYER_TAGS],
       group.budget || 0,
     );
+
+    logStage('candidatos (BD)');
 
     const candidates = games
       .filter((game) => !ownedAppIds.has(game.steamAppId))
@@ -369,6 +401,7 @@ export class RecommendationService {
       console.count('Recommendation found!');
     }
 
+    logStage('scoring y armado');
     console.timeEnd('Get Recommendations');
 
     return {

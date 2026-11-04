@@ -185,81 +185,117 @@ export class GameService {
     multiplayerTags: string[],
     budget: number,
   ) {
-    const candidateRows = await this.prismaService.$queryRaw<
+    return this.prismaService.$queryRaw<
       Array<{
         steamAppId: number;
-        matchedTags: bigint;
+        name: string;
+        releaseDate: Date | null;
+        reviewPercentage: number | null;
+        reviewCount: number | null;
+        isFree: boolean | null;
+        price: number | null;
+        initialPrice: number | null;
+        discount: number | null;
+        tags: Array<{
+          weight: number;
+          tag: { steamTagId: number | null; name: string };
+        }>;
       }>
     >(Prisma.sql`
-  SELECT
-      g."steamAppId",
-      COUNT(DISTINCT t."steamTagId") AS "matchedTags"
-    FROM "Game" g
-    JOIN "GameTag" gt
-      ON gt."gameId" = g."steamAppId"
-    JOIN "Tag" t
-      ON t."steamTagId" = gt."tagId"
-    WHERE t."name" IN (${Prisma.join(tagNames)})
-      AND g."reviewPercentage" >= 55
-      AND g."price" <= ${budget}
-      AND g."isMultiplayer" = true
-      AND NOT EXISTS (
-        SELECT 1
-        FROM "GameTag" vrgt
-        JOIN "Tag" vrt
-          ON vrt."steamTagId" = vrgt."tagId"
-        WHERE vrgt."gameId" = g."steamAppId"
-          AND vrt."name" = 'VR'
+      WITH candidates AS (
+        SELECT
+          g."steamAppId",
+          COUNT(DISTINCT t."steamTagId") AS "matchedTags"
+        FROM "Game" g
+        JOIN "GameTag" gt
+          ON gt."gameId" = g."steamAppId"
+        JOIN "Tag" t
+          ON t."steamTagId" = gt."tagId"
+        WHERE t."name" IN (${Prisma.join(tagNames)})
+          AND (
+            g."reviewPercentage" IS NULL
+            OR COALESCE(g."reviewCount", 0) = 0
+            OR g."reviewPercentage" >= 55
+          )
+          AND g."price" <= ${budget}
+          AND g."isMultiplayer" = true
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "GameTag" vrgt
+            WHERE vrgt."gameId" = g."steamAppId"
+              AND vrgt."tagId" = (SELECT "steamTagId" FROM "Tag" WHERE "name" = 'VR')
+          )
+        GROUP BY g."steamAppId"
+        HAVING COUNT(DISTINCT t."steamTagId") >= 3
+        ORDER BY "matchedTags" DESC
+        LIMIT 300
       )
-    GROUP BY g."steamAppId"
-    HAVING COUNT(DISTINCT t."steamTagId") >= 3
-    ORDER BY "matchedTags" DESC
-    LIMIT 300
-  `);
-
-    if (candidateRows.length === 0) {
-      return [];
-    }
-
-    const appIds = candidateRows.map((row) => row.steamAppId);
-
-    return this.prismaService.game.findMany({
-      where: {
-        steamAppId: {
-          in: appIds,
-        },
-      },
-      select: {
-        steamAppId: true,
-        name: true,
-        releaseDate: true,
-        reviewPercentage: true,
-        reviewCount: true,
-
-        isFree: true,
-        price: true,
-        initialPrice: true,
-        discount: true,
-
-        tags: {
-          select: {
-            weight: true,
-            tag: {
-              select: {
-                steamTagId: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
-    });
+      SELECT
+        g."steamAppId",
+        g."name",
+        g."releaseDate",
+        g."reviewPercentage",
+        g."reviewCount",
+        g."isFree",
+        g."price",
+        g."initialPrice",
+        g."discount",
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'weight', ogt."weight",
+              'tag', json_build_object(
+                'steamTagId', ot."steamTagId",
+                'name', ot."name"
+              )
+            )
+          ) FILTER (WHERE ogt."gameId" IS NOT NULL),
+          '[]'::json
+        ) AS "tags"
+      FROM candidates c
+      JOIN "Game" g
+        ON g."steamAppId" = c."steamAppId"
+      LEFT JOIN "GameTag" ogt
+        ON ogt."gameId" = g."steamAppId"
+      LEFT JOIN "Tag" ot
+        ON ot."steamTagId" = ogt."tagId"
+      GROUP BY g."steamAppId"
+    `);
   }
 
   async getNormalizedTagIdf(): Promise<Record<string, number>> {
     const totalGames = await this.prismaService.game.count();
 
-    const rows = await this.prismaService.$queryRaw<
+    // Camino rápido: Tag.gameCount precalculado (scripts/compute-tag-counts.ts).
+    let rows: Array<{ name: string; gameCount: bigint | number }> = [];
+
+    try {
+      rows = await this.prismaService.$queryRaw<
+        Array<{ name: string; gameCount: number }>
+      >(Prisma.sql`
+        SELECT "name", "gameCount" FROM "Tag" WHERE "gameCount" > 0
+      `);
+    } catch (error) {
+      // La columna todavía no existe (migración sin aplicar): se usa el conteo lento.
+      console.warn(
+        '[idf] No se pudo leer Tag.gameCount (¿migración sin aplicar?):',
+        error instanceof Error ? error.message : error,
+      );
+    }
+
+    if (rows.length === 0) {
+      console.warn(
+        '[idf] Tag.gameCount vacío: se usa el conteo lento (~4 s). Corré src/scripts/compute-tag-counts.ts',
+      );
+      rows = await this.countGamesPerTag();
+    }
+
+    return this.buildNormalizedIdf(totalGames, rows);
+  }
+
+  // Conteo directo sobre GameTag (lento, ~4 s); solo como respaldo.
+  private async countGamesPerTag() {
+    return this.prismaService.$queryRaw<
       Array<{
         name: string;
         gameCount: bigint;
@@ -267,13 +303,22 @@ export class GameService {
     >(Prisma.sql`
     SELECT
       t."name",
-      COUNT(DISTINCT gt."gameId") AS "gameCount"
-    FROM "Tag" t
-    JOIN "GameTag" gt
-      ON gt."tagId" = t."steamTagId"
-    GROUP BY t."steamTagId", t."name"
+      gt."gameCount"
+    FROM (
+      -- (gameId, tagId) es PK, así que COUNT(*) equivale a COUNT(DISTINCT gameId).
+      SELECT "tagId", COUNT(*) AS "gameCount"
+      FROM "GameTag"
+      GROUP BY "tagId"
+    ) gt
+    JOIN "Tag" t
+      ON t."steamTagId" = gt."tagId"
   `);
+  }
 
+  private buildNormalizedIdf(
+    totalGames: number,
+    rows: Array<{ name: string; gameCount: bigint | number }>,
+  ): Record<string, number> {
     const tags = rows.map((row) => {
       const gamesWithTag = Number(row.gameCount);
 
