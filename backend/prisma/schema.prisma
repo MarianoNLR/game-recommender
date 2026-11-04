@@ -55,6 +55,9 @@ model Tag {
   id       Int      @id @default(autoincrement())
   steamTagId Int?   @unique
   name     String   @unique
+  // Cantidad de juegos con este tag. Se calcula con scripts/compute-tag-counts.ts
+  // y se usa para el IDF (evita contar toda la tabla GameTag en cada request).
+  gameCount Int     @default(0)
 
   games    GameTag[]
 }
