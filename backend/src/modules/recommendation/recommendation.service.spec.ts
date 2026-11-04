@@ -24,6 +24,8 @@ const game = (appid: number, name: string, playtime: number): SteamGame => ({
 
 const taggedGame = (steamAppId: number, tags: string[]) => ({
   steamAppId,
+  name: `Game ${steamAppId}`,
+  imageUrl: null,
   tags: tags.map((name, index) => ({
     weight: 100 - index,
     tag: { name, steamTagId: index + 1 },

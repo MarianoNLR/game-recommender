@@ -9,6 +9,8 @@ import {
   MemberProfile,
   MemberProfileWithTags,
   MemberTagProfile,
+  CountedGame,
+  GroupProfileSummary,
 } from './recommendation.types';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { GameDetailsResponse } from '../game/game.types';
@@ -59,6 +61,43 @@ export class RecommendationService {
     };
   }
 
+  // Perfil del grupo para mostrar en pantalla: qué juegos de cada miembro se
+  // tuvieron en cuenta y qué aportó cada uno a los tags del grupo. No incluye
+  // la biblioteca completa ni los minutos jugados.
+  async getGroupProfileSummary(
+    accessCode: string,
+  ): Promise<GroupProfileSummary> {
+    const { group, memberProfiles, topGroupTags } =
+      await this.getGroupProfile(accessCode);
+
+    return {
+      group: {
+        name: group.name,
+        accessCode: group.accessCode,
+        budget: group.budget,
+      },
+      members: memberProfiles.map(
+        ({ steamId, name, avatarUrl, topTags, countedGames }) => ({
+          steamId,
+          name,
+          avatarUrl,
+          topTags,
+          countedGames,
+        }),
+      ),
+      topGroupTags,
+      groupTagBreakdown: topGroupTags.map((tag) => ({
+        tag,
+        members: memberProfiles
+          .map(({ steamId, countedGames }) => ({
+            steamId,
+            games: countedGames.filter((game) => game.tags.includes(tag)),
+          }))
+          .filter(({ games }) => games.length > 0),
+      })),
+    };
+  }
+
   // 1. Individual member profile with games and member info.
   // Viene del perfil cacheado (ver SteamProfileService), no siempre de Steam.
   async getMemberProfile(steamId: string): Promise<MemberProfile> {
@@ -101,6 +140,13 @@ export class RecommendationService {
       ]),
     );
 
+    const gameInfoByAppId = new Map(
+      games.map((game) => [game.steamAppId, game] as const),
+    );
+
+    // Juegos que sí aportaron al perfil (están en la base y tienen tags relevantes).
+    const counted: (Omit<CountedGame, 'share'> & { playtime: number })[] = [];
+
     const tagScores: Record<string, number> = {};
 
     topGames.forEach((game) => {
@@ -119,6 +165,16 @@ export class RecommendationService {
 
       relevantTags.forEach((tag) => {
         tagScores[tag] = (tagScores[tag] ?? 0) + playtime * weightPerTag;
+      });
+
+      const info = gameInfoByAppId.get(game.appid);
+
+      counted.push({
+        appId: game.appid,
+        name: info?.name ?? `#${game.appid}`,
+        imageUrl: info?.imageUrl ?? null,
+        playtime,
+        tags: relevantTags,
       });
     });
 
@@ -139,9 +195,18 @@ export class RecommendationService {
       .map(([tag]) => tag)
       .slice(0, 20);
 
+    // totalScore es la suma de minutos de los juegos que contaron.
+    const countedGames: CountedGame[] = counted
+      .map(({ playtime, ...game }) => ({
+        ...game,
+        share: totalScore > 0 ? playtime / totalScore : 0,
+      }))
+      .sort((a, b) => b.share - a.share);
+
     return {
       tagScores: normalizedTagScores,
       topTags,
+      countedGames,
     };
   }
 

@@ -163,6 +163,8 @@ export class GameService {
       },
       select: {
         steamAppId: true,
+        name: true,
+        imageUrl: true,
         tags: {
           select: {
             weight: true,
