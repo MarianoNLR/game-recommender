@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Eye } from "lucide-react";
+import { EXAMPLE_ACCESS_CODE } from "@/lib/config";
 
 export default function HomePage() {
   const [accessCode, setAccessCode] = useState("");
@@ -33,6 +34,17 @@ export default function HomePage() {
       >
         Crear grupo
       </Button>
+      {EXAMPLE_ACCESS_CODE && (
+        <Button
+          variant="secondary"
+          className="w-full max-w-xs cursor-pointer -mt-8"
+          size="lg"
+          onClick={() => navigate(`/recommendations/${EXAMPLE_ACCESS_CODE}`)}
+        >
+          <Eye className="h-4 w-4" />
+          Ver ejemplo
+        </Button>
+      )}
       <div className="flex flex-col items-center gap-2">
         <span className="text-muted-foreground text-sm">
           ¿Ya tenés un código?
