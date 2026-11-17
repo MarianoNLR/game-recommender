@@ -128,7 +128,6 @@ npx tsx src/scripts/compute-tag-counts.ts    # precomputation for the IDF
 
 ## Possible improvements
 
-- Weight by pairwise affinity between members, not just the group aggregate.
 - Rate limiting and per-IP limits on group creation.
 - End-to-end tests and CI with GitHub Actions.
 - Periodic refresh of prices and reviews.
