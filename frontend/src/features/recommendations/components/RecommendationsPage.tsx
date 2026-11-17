@@ -72,7 +72,7 @@ export default function RecommendationsPage() {
   // Sin perfil no hay nada que mostrar (grupo inexistente, vencido, etc.).
   if (profile.isError) {
     return (
-      <main className="min-h-screen bg-background flex items-center justify-center">
+      <main className="min-h-[calc(100svh-3.5rem)] bg-background flex items-center justify-center">
         <div className="text-center space-y-2">
           <p className="text-destructive text-lg font-medium">
             {profile.error.message ?? 'Error al obtener el perfil del grupo'}
@@ -89,7 +89,7 @@ export default function RecommendationsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-12 max-w-4xl mx-auto">
+    <main className="min-h-[calc(100svh-3.5rem)] bg-background px-4 py-12 max-w-4xl mx-auto">
       {profile.data ? (
         <div className="space-y-8">
           <div className="space-y-1">

@@ -17,7 +17,7 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-background flex flex-col items-center justify-center px-4 gap-12">
+    <main className="min-h-[calc(100svh-3.5rem)] bg-background flex flex-col items-center justify-center px-4 gap-12">
       <div className="text-center space-y-4 max-w-xl">
         <h1 className="text-4xl font-bold tracking-tight text-foreground">
           Encontrá juegos para tu grupo
