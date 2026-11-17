@@ -15,10 +15,11 @@ export class GroupsController {
     return this.groupsService.create(createGroupDto, ip);
   }
 
-  @Get()
-  findAll(): Promise<GroupResponseDto[]> {
-    return this.groupsService.findAll();
-  }
+  // Deshabilitado: exponia todos los grupos y sus codigos de acceso.
+  // @Get()
+  // findAll(): Promise<GroupResponseDto[]> {
+  //   return this.groupsService.findAll();
+  // }
 
   @Get(':accessCode')
   findOne(@Param('accessCode') accessCode: string): Promise<GroupResponseDto> {
